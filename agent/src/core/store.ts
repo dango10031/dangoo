@@ -69,7 +69,7 @@ function rowToMessage(row: Row): Message {
   return message;
 }
 
-export interface CreateSessionRecord extends StoreSessionInput {}
+export type CreateSessionRecord = StoreSessionInput;
 
 export interface CreateRunRecord extends StoreRunInput {
   requestId?: string;

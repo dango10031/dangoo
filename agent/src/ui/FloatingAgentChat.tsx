@@ -318,7 +318,6 @@ export function FloatingAgentChat({
   client,
   hostBridge,
   canvasId = hostBridge.canvasId,
-  sessionId,
   defaultOpen = true,
   open,
   onOpenChange,
@@ -330,9 +329,8 @@ export function FloatingAgentChat({
   onResolveAttachment,
   className,
 }: FloatingAgentChatProps) {
-  const fallbackClientRef = useRef<AgentClient | undefined>(undefined);
-  if (!fallbackClientRef.current) fallbackClientRef.current = new AgentClient();
-  const resolvedClient = client ?? fallbackClientRef.current;
+  const [fallbackClient] = useState(() => new AgentClient());
+  const resolvedClient = client ?? fallbackClient;
   const store = useMemo(() => createAgentStore({ client: resolvedClient, hostBridge, canvasId }), [resolvedClient, hostBridge, canvasId]);
   const state = useAgentState(store, (value) => value);
   const [internalOpen, setInternalOpen] = useState(defaultOpen);
@@ -385,15 +383,20 @@ export function FloatingAgentChat({
     }
   }, [resolvedClient]);
   useEffect(() => {
-    setSelectedSkills([]);
-    setSkillPickerOpen(false);
-    setSkillQuery('');
-    setHighlightedSkillIndex(0);
-    dismissedSlashDraftRef.current = undefined;
-    composerCursorRef.current = 0;
+    let active = true;
+    void Promise.resolve().then(() => {
+      if (!active) return;
+      setSelectedSkills([]);
+      setSkillPickerOpen(false);
+      setSkillQuery('');
+      setHighlightedSkillIndex(0);
+      dismissedSlashDraftRef.current = undefined;
+      composerCursorRef.current = 0;
+    });
+    return () => { active = false; };
   }, [canvasId]);
   useEffect(() => {
-    void refreshSkillCatalog();
+    void Promise.resolve().then(refreshSkillCatalog);
   }, [refreshSkillCatalog, canvasId]);
   useEffect(() => {
     if (!configured) return;
@@ -430,7 +433,7 @@ export function FloatingAgentChat({
     }
   };
 
-  const activeSlashInvocation = parseSlashSkillInvocation(state.draft, composerCursorRef.current);
+  const activeSlashInvocation = parseSlashSkillInvocation(state.draft, state.draft.length);
   const activeSkillQuery = activeSlashInvocation?.query ?? skillQuery;
   const filteredSkills = useMemo(() => filterSkills(skillCatalog, activeSkillQuery), [activeSkillQuery, skillCatalog]);
   const selectedSkillNames = useMemo(() => new Set(selectedSkills.map((skill) => skill.name)), [selectedSkills]);

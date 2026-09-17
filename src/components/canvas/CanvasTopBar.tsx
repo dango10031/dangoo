@@ -20,10 +20,6 @@ function CanvasTitle({ p }: { p: CanvasVm }) {
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (!editing) setDraft(p.canvasTitle)
-  }, [p.canvasTitle, editing])
-
-  useEffect(() => {
     if (editing) {
       inputRef.current?.focus()
       inputRef.current?.select()
@@ -46,7 +42,10 @@ function CanvasTitle({ p }: { p: CanvasVm }) {
     return (
       <button
         type="button"
-        onClick={() => setEditing(true)}
+        onClick={() => {
+          setDraft(p.canvasTitle)
+          setEditing(true)
+        }}
         title="点击重命名画布"
         className="group flex max-w-[220px] items-center gap-1.5 rounded-md px-2 py-1 text-left text-sm font-semibold text-foreground transition-colors hover:bg-muted"
       >

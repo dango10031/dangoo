@@ -242,6 +242,7 @@ export function useGlobalTags(ownerKey: string | null | undefined, onAuthExpired
   }, [ownerKey])
 
   return useMemo<GlobalTagsApi>(() => {
+    void version // 版本号触发 store 快照重建，避免全局 store 变化后返回旧标签列表
     const handleAuthErr = (err: unknown): boolean => {
       const status = (err as { status?: number })?.status
       if (status && isAuthExpired(status)) {
@@ -373,6 +374,5 @@ export function useGlobalTags(ownerKey: string | null | undefined, onAuthExpired
       deleteTag,
       applyTemplate,
     }
-    // version 变化时重建闭包, ownerKey/onAuthExpired 变化同步
   }, [version, ownerKey, onAuthExpired])
 }

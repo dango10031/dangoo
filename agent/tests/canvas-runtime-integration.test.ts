@@ -4,7 +4,7 @@ import {AgentRuntime} from '../src/core/runtime.js';
 import {SqliteStore} from '../src/core/store.js';
 import {ProviderRegistry} from '../src/providers/index.js';
 import {LocalCanvasGateway,UnavailableAssetGateway,createCanvasTools} from '../src/adapters/index.js';
-import type {Provider,ProviderEvent,Run} from '../src/contracts/index.js';
+import type {Provider,ProviderEvent} from '../src/contracts/index.js';
 
 test('real runtime -> registered canvas tool -> SQLite canvas -> durable conversation events',async()=>{
  const store=new SqliteStore();const canvas=new LocalCanvasGateway(':memory:');

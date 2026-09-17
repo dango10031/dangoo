@@ -6,9 +6,10 @@ export function ProviderSettings({ client, onSaved, onClose }: { client: AgentCl
   const [key, setKey] = useState('');
   const [busy, setBusy] = useState<'test' | 'save'>();
   const [notice, setNotice] = useState('');
+  const unsupported = !client.providerSettings;
   useEffect(() => {
     let active = true;
-    if (!client.providerSettings) { setNotice('当前服务不支持配置'); return; }
+    if (!client.providerSettings) return;
     void client.providerSettings().then(result => { if (active) setValue(result); }).catch(() => { if (active) setNotice('配置读取失败'); });
     return () => { active = false; };
   }, [client]);
@@ -31,6 +32,6 @@ export function ProviderSettings({ client, onSaved, onClose }: { client: AgentCl
       <label>API 密钥<input type="password" autoComplete="new-password" value={key} placeholder={value.hasKey ? '已配置 · 输入以更换' : '填写密钥'} disabled={!!busy} onChange={event => setKey(event.target.value)} /></label>
       <div className="agent-wait-actions"><button type="button" className="agent-button" disabled={!!busy} onClick={() => void submit('test')}>{busy === 'test' ? '测试中' : '测试连接'}</button><button type="submit" className="agent-button agent-button--primary" disabled={!!busy}>{busy === 'save' ? '保存中' : '保存'}</button></div>
     </form>}
-    {notice && <p role="status" className="agent-setting-note">{notice}</p>}
+    {(unsupported || notice) && <p role="status" className="agent-setting-note">{unsupported ? '当前服务不支持配置' : notice}</p>}
   </section>;
 }

@@ -325,7 +325,7 @@ export function mergePatchesCanvas(
       rctx.drawImage(patchCanvas, padded.x, padded.y)
     } catch (err) {
       const msg = err instanceof Error ? err.message : '局部图处理失败'
-      throw new Error(`第 ${idx} 张局部图：${msg}`)
+      throw new Error(`第 ${idx} 张局部图：${msg}`, { cause: err })
     }
   })
 

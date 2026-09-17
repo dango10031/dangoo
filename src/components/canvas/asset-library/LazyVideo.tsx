@@ -10,14 +10,11 @@ export function LazyVideo(props: VideoHTMLAttributes<HTMLVideoElement> & { root?
   const { root, src, ...rest } = props
   const hostRef = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
+  const forceVisible = typeof IntersectionObserver === 'undefined'
 
   useEffect(() => {
     const el = hostRef.current
     if (!el) return
-    if (typeof IntersectionObserver === 'undefined') {
-      setVisible(true)
-      return
-    }
     const ob = new IntersectionObserver(
       entries => {
         if (entries.some(en => en.isIntersecting)) setVisible(true)
@@ -30,7 +27,7 @@ export function LazyVideo(props: VideoHTMLAttributes<HTMLVideoElement> & { root?
 
   return (
     <div ref={hostRef} className="h-full w-full">
-      {visible && <video {...rest} src={mediaSrc(src as string)} />}
+      {(visible || forceVisible) && <video {...rest} src={mediaSrc(src as string)} />}
     </div>
   )
 }

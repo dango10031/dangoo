@@ -25,6 +25,15 @@ import { useCanvasVm, type CanvasVm, type ViewBounds } from '@/components/canvas
 import type { CanvasCardData } from '@/pages/Canvas/useCanvas'
 import type { CanvasConnection } from '@/pages/Canvas/canvasTypes'
 
+/*
+ * react-hooks/refs: CanvasStage 是画布手势/几何快速路径的性能边界。
+ * CanvasVm 刻意保持稳定引用，内部同时携带 DOM ref、几何 registry、
+ * 最新数据快照和事件函数；本文件的很多“渲染期读取”都是读当前提交快照
+ * 或注册 ref 到 DOM，不是用 ref 的变更驱动 React 重渲染。
+ * 此豁免只限本文件，不能扩散到普通业务组件。
+ */
+/* eslint-disable react-hooks/refs */
+
 /** 卡片包围盒与可见矩形是否相交(含容差); 兜底尺寸与 CanvasCardShell 一致 */
 function intersectsBounds(card: CanvasCardData, b: ViewBounds): boolean {
   const w = card.w || 208
@@ -146,11 +155,11 @@ interface StageIndex {
 const COLLAPSED_CHIP_W = 176
 const COLLAPSED_CHIP_H = 52
 
-function buildStageIndex(p: CanvasVm): StageIndex {
+function buildStageIndex(cards: CanvasVm['cards']): StageIndex {
   const cardById = new Map<string, CanvasCardData>()
   const cardsByGroup = new Map<string, CanvasCardData[]>()
   const collapsedGroups = new Set<string>()
-  p.cards.forEach(c => {
+  cards.forEach(c => {
     cardById.set(c.id, c)
     if (c.groupId) {
       const arr = cardsByGroup.get(c.groupId) ?? []
@@ -514,7 +523,8 @@ export function CanvasStage({ p }: { p: CanvasVm }) {
   }, [p.cards])
 
   // 查找索引只随卡片数据重建: 选中态/视图变化不重建, 连线层 memo 才能真正跳过无关重渲染
-  const idx = useMemo(() => buildStageIndex(p), [p.cards])
+  const cards = p.cards
+  const idx = useMemo(() => buildStageIndex(cards), [cards])
   const selectedSet = useMemo(() => new Set(p.selectedIds), [p.selectedIds])
   // 近场/连线矩形: 把最新视图(可能新于 React 状态: 平移快速路径)静默同步给探测器后取外扩矩形。
   // 近场外扩 1 个视口: 不仅提前挂载, 还保证快速反向往回甩时屏幕始终落在已挂载区内不露空;
@@ -528,16 +538,16 @@ export function CanvasStage({ p }: { p: CanvasVm }) {
   // 完整挂载集合: 选中卡 / 设置面板展开的编辑卡 / 拖线悬停的目标槽卡(槽高亮需要复刻卡挂载) /
   // 与视口相交(含 1 视口外扩)的卡。运行中的离屏卡不再强制挂载——壳上的状态点足够表达进度,
   // 结果回写发生在数据层, 卡滚回近场时自然看到终态; 这让 50~500 任务并跑时离屏重组件树保持为 0。
+  const connectionHoverCardId = p.connectionDraft?.hoverSlot?.cardId
   const nearIds = useMemo(() => {
     const set = new Set<string>()
-    p.cards.forEach(c => {
+    cards.forEach(c => {
       if (selectedSet.has(c.id) || intersectsBounds(c, nearBounds)) set.add(c.id)
     })
     if (p.editNodeId) set.add(p.editNodeId)
-    if (p.connectionDraft?.hoverSlot?.cardId) set.add(p.connectionDraft.hoverSlot.cardId)
+    if (connectionHoverCardId) set.add(connectionHoverCardId)
     return set
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.cards, nearBounds, selectedSet, p.editNodeId, p.connectionDraft?.hoverSlot?.cardId])
+  }, [cards, nearBounds, selectedSet, p.editNodeId, connectionHoverCardId])
   // 近场卡片后台预热 LOD 缩略图(滚回/缩小时直接命中), 只预热近场不全画布
   useEffect(() => {
     preloadLod(p.cards.filter(c => nearIds.has(c.id)).map(c => c.url))

@@ -115,7 +115,7 @@ export async function callLlmWithFallback(modelName: string, opts: LlmCallOption
   const timeoutId = window.setTimeout(() => ctrl.abort(), CHAT_ABORT_MS)
   if (opts.signal) opts.signal.addEventListener("abort", () => ctrl.abort())
 
-  let initialFailed = false
+  let initialFailed: boolean
   try {
     let res = await fetch(llmUrl("chat", modelName), {
       method: "POST",

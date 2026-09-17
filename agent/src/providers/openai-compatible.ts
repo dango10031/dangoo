@@ -5,7 +5,6 @@ import type {
   Provider,
   ProviderEvent,
   ProviderRequest,
-  ToolCall,
   ToolSpec,
   Usage,
 } from '../contracts/index.js';
@@ -199,7 +198,7 @@ function redact(value: string, secret?: string): string {
   if (secret && secret.length > 0) result = result.split(secret).join('[REDACTED]');
   // Keep provider diagnostics useful while preventing common bearer/key forms
   // from crossing into user-visible errors or event payloads.
-  result = result.replace(/Bearer\s+[A-Za-z0-9._~+\/-]+/gi, 'Bearer [REDACTED]');
+  result = result.replace(/Bearer\s+[A-Za-z0-9._~+/-]+/gi, 'Bearer [REDACTED]');
   result = result.replace(/\b(?:sk|key|token)[-_][A-Za-z0-9._~-]{8,}\b/gi, '[REDACTED]');
   return result.length > 800 ? `${result.slice(0, 800)}…` : result;
 }
@@ -611,6 +610,8 @@ export class OpenAICompatibleProvider implements Provider {
   }
 
   stream(request: ProviderRequest): AsyncIterable<ProviderEvent> {
+    // Nested async generators cannot close over `this` from method scope.
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const self = this;
     return (async function* streamWithRetry(): AsyncGenerator<ProviderEvent> {
       // Validate and size-check before the first network attempt. This also
@@ -710,6 +711,7 @@ export class OpenAICompatibleProvider implements Provider {
     let doneEmitted = false;
     let finishSeen = false;
     let finalReason: 'stop' | 'tool_calls' | 'length' = 'stop';
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const provider = this;
 
     const processEvent = async function* (raw: string): AsyncGenerator<ProviderEvent> {

@@ -34,7 +34,7 @@ test('OpenAI-compatible adapter reassembles UTF-8 text and multiple indexed tool
     `data: ${JSON.stringify({ choices: [], usage: { prompt_tokens: 4, completion_tokens: 6 } })}\n\n`,
     'data: [DONE]\n\n',
   ];
-  let body = responseFor(events);
+  const body = responseFor(events);
   const provider = new OpenAICompatibleProvider({
     baseUrl: 'http://provider/v4',
     model: 'glm-5.3-flash',

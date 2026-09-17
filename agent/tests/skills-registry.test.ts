@@ -5,12 +5,6 @@ import os from 'node:os';
 import path from 'node:path';
 import { SkillRegistry } from '../src/skills/index.js';
 
-function isWindowsSymlinkPrivilegeError(error: unknown): boolean {
-  if (process.platform !== 'win32' || !(error instanceof Error)) return false;
-  const code = (error as { code?: unknown }).code;
-  return code === 'EPERM' || code === 'EACCES' || code === 'ENOTSUP';
-}
-
 async function makeSkill(root: string, name: string, body: string, revision = '1.0.0'): Promise<string> {
   const dir = path.join(root, name);
   await mkdir(dir, { recursive: true });
@@ -54,28 +48,22 @@ test('metadata, progressive resources and portable resource paths are enforced',
   assert.match(registry.catalog(result.snapshot), /collage/);
 });
 
-test('file symlink resources cannot escape their package', async (t) => {
-  const root = await mkdtemp(path.join(os.tmpdir(), 'dangoo-skills-file-symlink-'));
-  t.after(async () => {
-    await rm(root, { recursive: true, force: true });
-  });
-  const skillDir = await makeSkill(root, 'collage', 'collage body');
-  const outside = path.join(root, 'outside.txt');
-  await writeFile(outside, 'secret');
-  try {
+if (process.platform !== 'win32') {
+  test('file symlink resources cannot escape their package', async (t) => {
+    const root = await mkdtemp(path.join(os.tmpdir(), 'dangoo-skills-file-symlink-'));
+    t.after(async () => {
+      await rm(root, { recursive: true, force: true });
+    });
+    const skillDir = await makeSkill(root, 'collage', 'collage body');
+    const outside = path.join(root, 'outside.txt');
+    await writeFile(outside, 'secret');
     await symlink(outside, path.join(skillDir, 'escape.txt'), 'file');
-  } catch (error) {
-    if (isWindowsSymlinkPrivilegeError(error)) {
-      t.skip('file symlink creation requires Windows symlink privileges');
-      return;
-    }
-    throw error;
-  }
-  const registry = new SkillRegistry({ roots: [{ path: root, scope: 'workspace' }] });
-  const result = await registry.discover();
-  assert.equal(result.errors.some((error) => error.message.includes('symlink')), true);
-  await assert.rejects(() => registry.resource('collage', 'escape.txt', result.snapshot), /symlink|resource|path/);
-});
+    const registry = new SkillRegistry({ roots: [{ path: root, scope: 'workspace' }] });
+    const result = await registry.discover();
+    assert.equal(result.errors.some((error) => error.message.includes('symlink')), true);
+    await assert.rejects(() => registry.resource('collage', 'escape.txt', result.snapshot), /symlink|resource|path/);
+  });
+}
 
 test('directory links cannot escape their package', async (t) => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'dangoo-skills-directory-link-'));

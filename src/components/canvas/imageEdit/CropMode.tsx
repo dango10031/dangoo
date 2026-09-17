@@ -63,7 +63,9 @@ export function CropMode({
       if (!rect) return
       e.preventDefault()
       e.stopPropagation()
+      // eslint-disable-next-line react-hooks/refs -- pointer-down 只在事件期读取 wrapRef
       const p = localPoint(e)
+      // eslint-disable-next-line react-hooks/refs -- pointer-down 只在事件期更新拖拽状态
       dragRef.current = { kind, sx: p.x, sy: p.y, orig: { ...rect } }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
     }

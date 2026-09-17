@@ -1,4 +1,4 @@
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useStore } from 'zustand'
 import { getAuthHeaders } from '@/lib/auth'
 import {
@@ -40,7 +40,7 @@ function looksLikeFileName(text: string): boolean {
   return /\.(jpe?g|png|webp|gif|bmp|tiff?|heic|heif|mp4|mov)$/i.test(text.trim())
 }
 
-function stripDeployedPrefix(value: unknown): any {
+function stripDeployedPrefix(value: unknown): unknown {
   if (typeof value === 'string') {
     return value.includes('/__pb/api/files/') ? canonicalMediaPath(value) : value
   }
@@ -63,8 +63,8 @@ export function useCanvasMedia(documentStore: CanvasDocumentStore) {
   const rehostingRef = useRef<Set<string>>(new Set())
   const healTriedRef = useRef<Set<string>>(new Set())
 
-  // 渲染期同步已确认媒体。上传中的 blob 不能进入该桶，否则会失去上一版永久媒体兜底。
-  {
+  // 渲染后同步已确认媒体。上传中的 blob 不能进入该桶，否则会失去上一版永久媒体兜底。
+  useEffect(() => {
     const liveIds = new Set(cards.map(card => card.id))
     Array.from(lastPersistedMediaRef.current.keys()).forEach(id => {
       if (!liveIds.has(id)) lastPersistedMediaRef.current.delete(id)
@@ -79,7 +79,7 @@ export function useCanvasMedia(documentStore: CanvasDocumentStore) {
         })
       }
     })
-  }
+  }, [cards])
 
   const cacheDataUrl = useCallback((key: string, value: string) => {
     const cache = dataUrlCacheRef.current
@@ -107,7 +107,7 @@ export function useCanvasMedia(documentStore: CanvasDocumentStore) {
     inFlightResultKeys?: Set<string>,
   ): CanvasCardData[] => {
     return rawCards.map(raw => {
-      let card: CanvasCardData = stripDeployedPrefix(raw)
+      let card: CanvasCardData = stripDeployedPrefix(raw) as CanvasCardData
       if (card.jobStatus === 'running' || card.jobStatus === 'queued') {
         const hasSuccess =
           !!card.url ||

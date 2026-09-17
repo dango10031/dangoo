@@ -8,7 +8,7 @@ import { stableJson } from '../src/core/types.js';
 import { ProviderRegistry } from '../src/providers/index.js';
 import { ContextManager } from '../src/context/index.js';
 import { SkillRegistry } from '../src/skills/index.js';
-import type { ContextManagerLike, ContextState, Provider, ProviderEvent, ProviderRequest, Session, Run, ToolDefinition } from '../src/contracts/index.js';
+import type { ContextManagerLike, Provider, ProviderEvent, ProviderRequest, Run, Session, ToolDefinition } from '../src/contracts/index.js';
 
 const capabilities = () => ({ contextWindow: 20_000, maxOutputTokens: 1_000, tools: true, vision: false, parallelTools: true });
 

@@ -1,5 +1,4 @@
 import type {
-  AssetRef,
   CompactResult,
   ContentPart,
   ContextState,
@@ -84,8 +83,8 @@ export class ContextError extends Error {
     | 'summary_failed'
     | 'store_failed';
 
-  constructor(message: string, code: ContextError['code']) {
-    super(message);
+  constructor(message: string, code: ContextError['code'], options?: ErrorOptions) {
+    super(message, options);
     this.name = 'ContextError';
     this.code = code;
   }
@@ -469,11 +468,11 @@ export class ContextManager {
     try {
       return await this.historyStore.save({ state: cloneState(state), messages: state.messages.map(cloneMessage), savedAt: Date.now() });
     } catch (error) {
-      throw new ContextError('无法保存压缩前的原始历史', 'store_failed');
+      throw new ContextError('无法保存压缩前的原始历史', 'store_failed', { cause: error });
     }
   }
 
-  private summaryInput(state: ContextState, capabilities: ModelCapabilities, model: string): Message[] {
+  private summaryInput(state: ContextState, capabilities: ModelCapabilities, _model: string): Message[] {
     const prefix = [
       '请压缩 Dangoo 艺术创作会话上下文。保留当前目标、用户约束、已完成步骤、未完成事项、当前 Skill 阶段，以及所有 canvas/node/asset ID 和版本、批次顺序、未完成 job、工具调用事实。不要创造或修改事实。',
       formatPinnedContext(state),
@@ -485,7 +484,7 @@ export class ContextManager {
     // input budget, retain complete call/result units from the tail and keep a
     // deterministic count in the system prompt; the raw copy is already safe.
     const budget = Math.max(1, capabilities.contextWindow - this.outputReserve(capabilities));
-    let selected: HistoryUnit[] = [];
+    const selected: HistoryUnit[] = [];
     let used = this.estimate(messages);
     for (let i = units.length - 1; i >= 0; i -= 1) {
       const cost = this.estimate(units[i].messages);

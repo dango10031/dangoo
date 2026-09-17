@@ -103,6 +103,7 @@ export function CardExportDock({ card }: { card: CanvasCardData }) {
         )}
       {dockBtn(
         '导入剪映(经本地助手)',
+        // eslint-disable-next-line react-hooks/refs -- onClick 只会在事件期调用
         () => void runBusy('jianying', () => p.handleImportSelectionToJianying([cardId])),
         jyBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />,
         jyBusy,
@@ -111,6 +112,7 @@ export function CardExportDock({ card }: { card: CanvasCardData }) {
         <>
           {dockBtn(
             '导入 Photoshop(经本地助手)',
+            // eslint-disable-next-line react-hooks/refs -- onClick 只会在事件期调用
             () => void runBusy('photoshop', () => p.handleImportSelectionToAdobe([cardId], 'photoshop')),
             photoshopBusy || p.adobeImporting === 'photoshop' ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -121,6 +123,7 @@ export function CardExportDock({ card }: { card: CanvasCardData }) {
           )}
           {dockBtn(
             '导入 Illustrator(经本地助手)',
+            // eslint-disable-next-line react-hooks/refs -- onClick 只会在事件期调用
             () => void runBusy('illustrator', () => p.handleImportSelectionToAdobe([cardId], 'illustrator')),
             illustratorBusy || p.adobeImporting === 'illustrator' ? (
               <Loader2 className="h-4 w-4 animate-spin" />

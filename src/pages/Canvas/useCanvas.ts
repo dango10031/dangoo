@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
@@ -338,18 +338,18 @@ export function useCanvas() {
   if (!probeRef.current) probeRef.current = new ViewportProbe()
 
   /** 统一的视图状态入口: 同步 ref + 直接写变换层 DOM(平移快速路径后提交状态也一致) */
-  function setViewport(next: CanvasViewport | ((prev: CanvasViewport) => CanvasViewport)) {
+  const applyContentTransform = useCallback((v: CanvasViewport) => {
+    const el = contentRef.current
+    if (el) el.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.scale})`
+  }, [])
+
+  const setViewport = useCallback((next: CanvasViewport | ((prev: CanvasViewport) => CanvasViewport)) => {
     const resolved = typeof next === 'function' ? (next as (prev: CanvasViewport) => CanvasViewport)(viewportRef.current) : next
     viewportRef.current = resolved
     panCommitRef.current = { x: resolved.x, y: resolved.y }
     setViewportState(resolved)
     applyContentTransform(resolved)
-  }
-  /** 只写变换层 DOM, 不触发 React 渲染(平移快速路径); 松手/停顿后再提交状态 */
-  function applyContentTransform(v: CanvasViewport) {
-    const el = contentRef.current
-    if (el) el.style.transform = `translate(${v.x}px, ${v.y}px) scale(${v.scale})`
-  }
+  }, [applyContentTransform])
   /** 框选矩形直接写样式层, 拖动过程零 React 渲染 */
   function paintMarqueeLayer(rect: MarqueeRect | null) {
     const el = marqueeLayerRef.current
@@ -954,7 +954,7 @@ export function useCanvas() {
   }, [])
 
   // 拉取钱包余额
-  async function refreshWallet() {
+  const refreshWallet = useCallback(async () => {
     if (!getLocalAccount()) {
       setWalletBalance(null)
       setWalletAdmin(false)
@@ -974,11 +974,12 @@ export function useCanvas() {
     } catch {
       // 钱包拉取失败不阻塞
     }
-  }
+  }, [])
+  const selectedIdsKey = selectedIds.join(',')
+
   useEffect(() => {
-    void refreshWallet()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [account?.id])
+    Promise.resolve().then(refreshWallet)
+  }, [account?.id, refreshWallet])
 
   /** 打开充值弹窗(未登录先弹登录) */
   function openRecharge() {
@@ -1602,7 +1603,7 @@ export function useCanvas() {
 
   /** 老数据兼容 + 新节点中间状态恢复: 运行中被刷新打断的任务标记失败可重试 */
   /** 深度剥除卡片任意字段里固化的部署前缀(/app-preview|/p /app-xxx/__pb), 供跨环境自愈 */
-  function stripDeployedPrefix(value: unknown): any {
+  function stripDeployedPrefix(value: unknown): unknown {
     if (typeof value === 'string') {
       return value.includes('/__pb/api/files/') ? canonicalMediaPath(value) : value
     }
@@ -1625,7 +1626,7 @@ export function useCanvas() {
       // 历史数据可能把部署前缀(/app-preview/.../__pb 或 /p/.../__pb)固化进了媒体 URL,
       // 切到另一种部署后前缀对不上会整批 404 裂图; 统一剥成环境无关的裸路径, 渲染时再按当前环境拼。
       // 深度遍历卡片所有字段(url/results/refUrls/ttsState 等), 命中即归一化。
-      let c: CanvasCardData = stripDeployedPrefix(raw)
+      let c: CanvasCardData = stripDeployedPrefix(raw) as CanvasCardData
       // 顶层运行态在刷新/跨环境恢复时必须收敛: 上传/生成任务不跨页面续跑,
       // 残留 running/queued 会让卡片永久被当忙碌态——工具坞(导出/编辑/标签)与缩放柄全部不显示。
       // 已有成品结果按成功收敛, 否则清回空闲(结果项自身的中断态在下面 generate 分支单独标失败可重试)。
@@ -1919,6 +1920,7 @@ export function useCanvas() {
     jobAbortsRef.current.forEach(ac => ac.abort())
     jobAbortsRef.current.clear()
     // 切换画布或刷新时先锁住自动保存，避免旧画布状态覆盖刚加载的内容。
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 自动保存闸门必须与旧画布状态同帧关闭；延迟一拍会重新打开旧文档覆盖窗口
     setDocLoaded(false)
     const sessionToken = sessionTokenRef.current
     // 切换前先把「上一画布」防抖中未落库的改动尽力发出去(读会话桶最新快照, 不依赖闭包)
@@ -2176,9 +2178,7 @@ export function useCanvas() {
       if (targetCanvasId === canvasId) setSaveState(localSafeRef.current[targetCanvasId] ? 'local' : 'error')
       return
     }
-    let res: Response
-    try {
-      res = await fetch(`${CANVASES_API}/${targetCanvasId}`, {
+    const res = await fetch(`${CANVASES_API}/${targetCanvasId}`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -2188,10 +2188,6 @@ export function useCanvas() {
         body: bodyText,
         keepalive: !!opts?.keepalive,
       })
-    } catch (netErr) {
-      // 统一落到下面的 catch 处理(重试/本地态), 这里不重复 finally 清理逻辑
-      throw netErr
-    }
     try {
       if (res.ok) {
         const updated = (await res.json().catch(() => null)) as { canvas_data?: { rev?: number } } | null
@@ -2278,9 +2274,9 @@ export function useCanvas() {
       const stillDirty = !!(saveDirtyRef.current[targetCanvasId]?.full || saveDirtyRef.current[targetCanvasId]?.view)
       if (!stillDirty) cancelSavingFlash()
       // 409 冲突已挂起等用户选择时, 绝不自动补发(否则又用旧快照覆盖); 其余情况有待发改动则串行补发最新快照
-      if (saveConflictRef.current?.canvasId === targetCanvasId) return
-      if (localRestoreRef.current?.canvasId === targetCanvasId) return
-      if (stillDirty) void sendPersist(targetCanvasId)
+      const conflictPending = saveConflictRef.current?.canvasId === targetCanvasId
+      const restorePending = localRestoreRef.current?.canvasId === targetCanvasId
+      if (!conflictPending && !restorePending && stillDirty) void sendPersist(targetCanvasId)
     }
   }
 
@@ -2559,15 +2555,16 @@ export function useCanvas() {
 
   // 内容变化: 全量保存(程序灌入服务端文档的一拍跳过, 避免打开/同步后无意义回存)
   useEffect(() => {
+    const timers = saveTimerRef.current
     if (suppressContentSaveRef.current > 0) {
       suppressContentSaveRef.current -= 1
       return
     }
     scheduleSave('full')
     return () => {
-      if (canvasId && saveTimerRef.current[canvasId]) {
-        clearTimeout(saveTimerRef.current[canvasId])
-        delete saveTimerRef.current[canvasId]
+      if (canvasId && timers[canvasId]) {
+        clearTimeout(timers[canvasId])
+        delete timers[canvasId]
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2575,15 +2572,16 @@ export function useCanvas() {
 
   // 视图变化(平移/缩放): 只保存视图(程序灌入服务端文档的一拍跳过)
   useEffect(() => {
+    const timers = saveTimerRef.current
     if (suppressViewSaveRef.current > 0) {
       suppressViewSaveRef.current -= 1
       return
     }
     scheduleSave('view')
     return () => {
-      if (canvasId && saveTimerRef.current[canvasId]) {
-        clearTimeout(saveTimerRef.current[canvasId])
-        delete saveTimerRef.current[canvasId]
+      if (canvasId && timers[canvasId]) {
+        clearTimeout(timers[canvasId])
+        delete timers[canvasId]
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2666,6 +2664,7 @@ export function useCanvas() {
       const m = lastId ? marksOf(lastId) : null
       if (!lastId || !m || (!m.full && !m.view)) return
       // SPA 内路由离开: JS 环境仍存活, 先落盘再抢发
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- 卸载兜底必须读取最新的本地安全标记
       if (m.full && !localSafeRef.current[lastId]) {
         void dumpLocalSnapshotNow(lastId).then(ok => {
           if (ok) void sendPersist(lastId, { keepalive: true })
@@ -2703,7 +2702,6 @@ export function useCanvas() {
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
     // 回调内全部读 ref, 只随画布 id 挂一次: 旧依赖每次编辑/任务回写都重订阅一次监听
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId])
 
   // 网络恢复 / 定时退避双保险: 从离线回到在线, 立刻把所有画布的待发改动补发一次
@@ -3451,7 +3449,7 @@ export function useCanvas() {
   /** 刷新恢复: 语音克隆未完成任务续轮询(按受理任务 ID 精确认领) */
   async function restoreTtsJobs(jobs: PendingJobRecord[], docCards: CanvasCardData[], sessionToken: number) {
     if (!jobs.length) return
-    let items: Array<{ jobId: string; taskId?: string; status: string; resultUrl?: string; errorMessage?: string; created?: string }> = []
+    let items: Array<{ jobId: string; taskId?: string; status: string; resultUrl?: string; errorMessage?: string; created?: string }>
     try {
       const r = await callAiApp<{ ok: boolean; items?: Array<{ jobId: string; taskId?: string; status: string; resultUrl?: string; errorMessage?: string; created?: string }> }>(
         `/api/aigc/ai-app/${TTS_APP_SLUG}/history`,
@@ -3853,7 +3851,7 @@ export function useCanvas() {
   /** 刷新恢复: 动作迁移未完成任务续轮询(按受理任务 ID 精确认领) */
   async function restoreMotionJobs(jobs: PendingJobRecord[], docCards: CanvasCardData[], sessionToken: number) {
     if (!jobs.length) return
-    let items: Array<{ jobId: string; taskId?: string; status: string; resultUrl?: string; errorMessage?: string; created?: string }> = []
+    let items: Array<{ jobId: string; taskId?: string; status: string; resultUrl?: string; errorMessage?: string; created?: string }>
     try {
       const r = await callAiApp<{ ok: boolean; items?: Array<{ jobId: string; taskId?: string; status: string; resultUrl?: string; errorMessage?: string; created?: string }> }>(
         `/api/aigc/ai-app/${MOTION_APP_SLUG}/history`,
@@ -4169,7 +4167,7 @@ export function useCanvas() {
   /** 刷新恢复: 视频高清修复未完成任务续轮询(按受理任务 ID 精确认领) */
   async function restoreVsrJobs(jobs: PendingJobRecord[], docCards: CanvasCardData[], sessionToken: number) {
     if (!jobs.length) return
-    let items: Array<{ jobId: string; taskId?: string; status: string; resultUrl?: string; created?: string }> = []
+    let items: Array<{ jobId: string; taskId?: string; status: string; resultUrl?: string; created?: string }>
     try {
       const r = await callAiApp<{ ok: boolean; items?: Array<{ jobId: string; taskId?: string; status: string; resultUrl?: string; created?: string }> }>(
         `/api/aigc/ai-app/${VSR_APP_SLUG}/history`,
@@ -5598,7 +5596,7 @@ export function useCanvas() {
       if (wheelRaf) cancelAnimationFrame(wheelRaf)
       if (commitTimer) clearTimeout(commitTimer)
     }
-  }, [docLoaded])
+  }, [docLoaded, setViewport, applyContentTransform])
 
   function zoomBy(factor: number) {
     const el = stageRef.current
@@ -6418,26 +6416,29 @@ export function useCanvas() {
   }
 
   useEffect(() => {
-    setBatchSettingsReady(false)
-    const soloId = selectedIds.length === 1 ? selectedIds[0] : null
-    const soloCard = soloId ? cardsRef.current.find(c => c.id === soloId) : undefined
-    // 拖动卡片松手造成的选中: 不自动弹出面板(区分「移动」与「原地点击」), 标记只读一次
-    const dragged = suppressAutoPanelRef.current
-    suppressAutoPanelRef.current = false
-    // 已接下游(融合/生成/润色等任意节点)的生成节点默认收起, 避免点击图片或节点时参数面板弹出遮挡;
-    // 没有下游时, 原地点击选中即展开面板
-    const hasOutgoing =
-      !!soloCard && soloCard.kind === 'generate' && connectionsRef.current.some(conn => conn.fromId === soloId)
-    if (soloCard && soloCard.kind === 'generate' && !hasOutgoing && !dragged) {
-      setEditNodeId(soloId)
-      return
-    }
-    // 拖动移动 / 已有下游 / 非生成节点 / 取消选择: 不自动弹出(已展开的拖动时保留); 同选中下手动展开则保留
-    setEditNodeId(prev => (prev && prev === soloId ? prev : null))
-  }, [selectedIds.join(',')])
+    queueMicrotask(() => {
+      setBatchSettingsReady(false)
+      const soloId = selectedIdsRef.current.length === 1 ? selectedIdsRef.current[0] : null
+      const soloCard = soloId ? cardsRef.current.find(c => c.id === soloId) : undefined
+      // 拖动卡片松手造成的选中: 不自动弹出面板(区分「移动」与「原地点击」), 标记只读一次
+      const dragged = suppressAutoPanelRef.current
+      suppressAutoPanelRef.current = false
+      // 已接下游(融合/生成/润色等任意节点)的生成节点默认收起, 避免点击图片或节点时参数面板弹出遮挡;
+      // 没有下游时, 原地点击选中即展开面板
+      const hasOutgoing =
+        !!soloCard && soloCard.kind === 'generate' && connectionsRef.current.some(conn => conn.fromId === soloId)
+      if (soloCard && soloCard.kind === 'generate' && !hasOutgoing && !dragged) {
+        setEditNodeId(soloId)
+        return
+      }
+      // 拖动移动 / 已有下游 / 非生成节点 / 取消选择: 不自动弹出(已展开的拖动时保留); 同选中下手动展开则保留
+      setEditNodeId(prev => (prev && prev === soloId ? prev : null))
+    })
+  }, [selectedIdsKey])
 
   // 创建菜单关闭(已创建/ Esc / 点空白 / 滚轮)或无连接来源打开时, 清掉停驻的连接预览线
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 连接预览线必须与创建菜单关闭同帧清理，延迟会出现幽灵线
     if (!addMenuPos?.connectFrom) setConnectionDraft(null)
   }, [addMenuPos])
 
@@ -6525,7 +6526,7 @@ export function useCanvas() {
     }
     for (const [modelKey, jobs] of byModel.entries()) {
       const appSlug = aiAppSlugOf(modelKey)
-      let items: AigcHistoryItem[] = []
+      let items: AigcHistoryItem[]
       try {
         if (appSlug) {
           // AI 应用渠道有独立的历史/续轮询接口, 不走标准 openapi history
@@ -6858,7 +6859,6 @@ export function useCanvas() {
       active = false
       window.removeEventListener('dangoo:assets-changed', onAssetsChanged)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [account?.email])
 
   /** 加载下一页全局资产, 追加到已有列表(去重) */
@@ -6993,7 +6993,7 @@ export function useCanvas() {
   // 全局文件夹: 跟随账号加载
   useEffect(() => {
     if (!account?.email) {
-      setGlobalFolders([])
+      Promise.resolve().then(() => setGlobalFolders([]))
       return
     }
     let active = true
@@ -7278,7 +7278,7 @@ export function useCanvas() {
       )
     if (!hasInput) return { ok: false, reason: '请选中至少一个生成节点和它的输入节点' }
     return { ok: true, reason: '把选中的节点链路存为可复用工作流' }
-  }, [selectedIds, cards])
+  }, [selectedIds, cards, connections])
 
   /** 默认工作流名称(追加当天日期, 同名多次保存可区分) */
   function defaultWorkflowName(): string {
@@ -8682,7 +8682,7 @@ export function useCanvas() {
     }
     const repStartedAt = Date.now()
     const repRefs: Record<'front' | 'back', string[]> = { front: [], back: [] }
-    let repBodies: Record<'front' | 'back', Record<string, unknown> | undefined> = { front: undefined, back: undefined }
+    const repBodies: Record<'front' | 'back', Record<string, unknown> | undefined> = { front: undefined, back: undefined }
     try {
       // Logo / 二维码同样支持连线槽位, 取槽位有效图
       const slotUrls = effectiveRepSlots(cardId)
@@ -8829,7 +8829,7 @@ export function useCanvas() {
         }
         return { slug: slugKey, label: fam.label, kind: video ? 't2v' : 't2i', media: fam.media, priceText: priceLabel }
       }),
-    [modelPrices],
+    [],
   )
 
   return {

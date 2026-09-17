@@ -376,7 +376,7 @@ export class SkillRegistry implements SkillRegistryLike {
       let canonicalRoot: string;
       try {
         canonicalRoot = await fs.realpath(root.path);
-      } catch (error) {
+      } catch {
         allErrors.push({ path: root.path, message: 'Skill root cannot be resolved' });
         continue;
       }

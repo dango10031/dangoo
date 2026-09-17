@@ -125,7 +125,9 @@ export function GeneratedAssetsSection({ p }: { p: CanvasVm }) {
   const [keyword, setKeyword] = useState('')
   const [projectId, setProjectId] = useState('')
   const [sortOrder, setSortOrder] = useState<AssetSortOrder>('newest')
-  const [visibleCount, setVisibleCount] = useState(PAGE_ITEM_COUNT)
+  const filterKey = [kindFilter, keyword, projectId, sortOrder].join('\0')
+  const [visiblePage, setVisiblePage] = useState({ key: filterKey, count: PAGE_ITEM_COUNT })
+  const visibleCount = visiblePage.key === filterKey ? visiblePage.count : PAGE_ITEM_COUNT
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [savingIds, setSavingIds] = useState<Set<string>>(new Set)
@@ -171,19 +173,19 @@ export function GeneratedAssetsSection({ p }: { p: CanvasVm }) {
     return sortOrder === 'newest' ? list : [...list].sort((a, b) => a.createdAt - b.createdAt)
   }, [searched, kindFilter, sortOrder])
 
-  // 任何筛选变化重置分页
-  useEffect(() => {
-    setVisibleCount(PAGE_ITEM_COUNT)
-  }, [kindFilter, keyword, projectId, sortOrder])
-
   // 数据集刷新后, 清掉已不存在的选中项与详情
   useEffect(() => {
-    setSelectedIds(prev => {
-      const next = new Set<string>()
-      for (const id of prev) if (data.assets.some(a => a.id === id)) next.add(id)
-      return next
+    let active = true
+    queueMicrotask(() => {
+      if (!active) return
+      setSelectedIds(prev => {
+        const next = new Set<string>()
+        for (const id of prev) if (data.assets.some(a => a.id === id)) next.add(id)
+        return next
+      })
+      if (previewId && !data.assets.some(a => a.id === previewId)) setPreviewId(null)
     })
-    if (previewId && !data.assets.some(a => a.id === previewId)) setPreviewId(null)
+    return () => { active = false }
   }, [data.assets, previewId])
 
   const visibleAssets = useMemo(() => filtered.slice(0, visibleCount), [filtered, visibleCount])
@@ -412,7 +414,7 @@ export function GeneratedAssetsSection({ p }: { p: CanvasVm }) {
           <div className="flex justify-center pb-3 pt-1">
             <button
               type="button"
-              onClick={() => setVisibleCount(c => c + PAGE_ITEM_COUNT)}
+              onClick={() => setVisiblePage({ key: filterKey, count: visibleCount + PAGE_ITEM_COUNT })}
               className="h-8 rounded-lg border border-border bg-card px-4 text-xs font-medium text-muted-foreground transition-colors hover:border-primary hover:text-primary"
             >
               加载更多(剩余 {filtered.length - visibleCount} 项)

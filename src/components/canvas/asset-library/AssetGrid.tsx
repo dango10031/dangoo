@@ -53,14 +53,14 @@ export function AssetGrid({
     depthRef.current = 0
     setDragOver(false)
     if (busyRef.current || workflowMode) return
-    let cardIds: string[] = []
+    let cardIds: string[] | undefined
     try {
       const payload = JSON.parse(e.dataTransfer.getData(ASSET_DND_CARD) || '{}') as { cardIds?: string[] }
-      cardIds = Array.isArray(payload.cardIds) ? payload.cardIds : []
+      cardIds = Array.isArray(payload.cardIds) ? payload.cardIds : undefined
     } catch {
-      cardIds = []
+      cardIds = undefined
     }
-    if (!cardIds.length) return
+    if (!cardIds?.length) return
     busyRef.current = true
     try {
       await p.handleDropCardsToLibrary(cardIds, scope, folderId)

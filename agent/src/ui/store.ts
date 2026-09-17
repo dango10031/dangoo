@@ -1,6 +1,5 @@
-import { eventPayload, eventSequence, parseSsePayload } from './sse';
+import { eventPayload, eventSequence } from './sse';
 import type {
-  AgentClientLike,
   AgentEventView,
   AgentSessionView,
   AgentStore,
@@ -8,10 +7,8 @@ import type {
   AgentStoreOptions,
   AgentStoreState,
   AssetCardData,
-  ChatAttachment,
   ChatMessage,
   JobCardData,
-  PendingInput,
   RunView,
   Selection,
   SseEnvelope,

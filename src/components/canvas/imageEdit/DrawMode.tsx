@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Brush,
   Square,
@@ -135,7 +135,7 @@ export function DrawMode({
     return () => img.removeEventListener('load', measure)
   }, [imageUrl])
 
-  const shapes = stack[index] ?? []
+  const shapes = useMemo(() => stack[index] ?? [], [stack, index])
 
   // 实时重绘: 每次形状变化都整幅重绘, 拖动矩形/椭圆无残影
   useEffect(() => {

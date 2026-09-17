@@ -11,18 +11,19 @@ type CanvasVm = ReturnType<typeof useCanvas>
 /** Loop 节点: 读取上游 Agent 任务批量执行, 自身不调 LLM */
 export function LoopNodeBody({ p, card }: { p: CanvasVm; card: CanvasCardData }) {
   const st = card.loopState
-  if (!st) return null
-  const isVideo = st.media === 'video'
-  const refs = p.loopSharedRefs(card.id)
+  const isVideo = st?.media === 'video'
+  const refs = st ? p.loopSharedRefs(card.id) : []
   // 渠道按家族媒体类型归类; 用户显式选的渠道(家族 key)即视为匹配, 否则运行时按素材自动匹配
-  const famMedia = p.channelFamilyMedia(st.model)
+  const famMedia = st ? p.channelFamilyMedia(st.model) : null
   const kindMatch = famMedia ? famMedia === (isVideo ? 'video' : 'image') : false
-  const runModel = p.resolveRunModel(st.model, refs.length > 0)
-  const info = p.getNodeModelInfo(runModel)
+  const runModel = st ? p.resolveRunModel(st.model, refs.length > 0) : ''
   useEffect(() => {
+    if (!runModel) return
     p.requestModelInfo(runModel)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runModel])
+  if (!st) return null
+  const info = p.getNodeModelInfo(runModel)
   const scalarOpts = (name: string) => info?.scalar_params?.find(sp => sp.name === name)?.enum ?? []
   const resOpts = scalarOpts('resolution')
   const arOpts = withAdaptiveRatio(scalarOpts('aspectRatio'))

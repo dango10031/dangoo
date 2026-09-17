@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { createHash } from 'node:crypto';
-import type { CanvasGateway, CanvasSnapshot, CanvasOperation, NodeCapability, Scope } from '../contracts/index.js';
+import type { CanvasGateway, CanvasSnapshot, CanvasOperation, Scope } from '../contracts/index.js';
 import { CONTRACT_VERSION } from '../contracts/index.js';
 import { IntegrationError } from './assets.js';
 

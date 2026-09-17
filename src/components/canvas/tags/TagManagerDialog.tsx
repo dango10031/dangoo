@@ -34,26 +34,28 @@ export function TagManagerDialog() {
   // 打开弹窗: 带 draft(从卡片浮层新建)→新建态; 否则选中第一个标签; 无任何标签→空白新建态
   useEffect(() => {
     if (!open) return
-    setConfirmDelete(false)
-    setPickerOpen(false)
-    if (p.tagManagerDraft) {
-      const d = p.tagManagerDraft
-      setEditingId(null)
-      setDraftName(d.name ?? '')
-      setDraftColor(normalizeHex(d.color) ?? PRESET_COLORS[0])
-      setHexInput(normalizeHex(d.color) ?? PRESET_COLORS[0])
-    } else if (tags.length > 0) {
-      const first = tags[0]
-      setEditingId(first.id ?? '')
-      setDraftName(first.name)
-      setDraftColor(first.color)
-      setHexInput(first.color)
-    } else {
-      setEditingId(null)
-      setDraftName('')
-      setDraftColor(PRESET_COLORS[0])
-      setHexInput(PRESET_COLORS[0])
-    }
+    queueMicrotask(() => {
+      setConfirmDelete(false)
+      setPickerOpen(false)
+      if (p.tagManagerDraft) {
+        const d = p.tagManagerDraft
+        setEditingId(null)
+        setDraftName(d.name ?? '')
+        setDraftColor(normalizeHex(d.color) ?? PRESET_COLORS[0])
+        setHexInput(normalizeHex(d.color) ?? PRESET_COLORS[0])
+      } else if (tags.length > 0) {
+        const first = tags[0]
+        setEditingId(first.id ?? '')
+        setDraftName(first.name)
+        setDraftColor(first.color)
+        setHexInput(first.color)
+      } else {
+        setEditingId(null)
+        setDraftName('')
+        setDraftColor(PRESET_COLORS[0])
+        setHexInput(PRESET_COLORS[0])
+      }
+    })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
 

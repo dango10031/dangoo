@@ -10,10 +10,27 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { parse as babelParse } from '@babel/parser'
 import _traverse from '@babel/traverse'
+import type { NodePath } from '@babel/traverse'
 import MagicString from 'magic-string'
 
+type BabelBaseNode = { type: string; end?: number | null; loc?: { start: { line: number; column: number } } | null }
+type JSXIdentifier = BabelBaseNode & { type: 'JSXIdentifier'; name: string }
+type JSXMemberExpression = BabelBaseNode & { type: 'JSXMemberExpression' }
+type JSXNamespacedName = BabelBaseNode & { type: 'JSXNamespacedName' }
+type JSXOpeningName = JSXIdentifier | JSXMemberExpression | JSXNamespacedName
+type JSXAttributeName = { type: string; name?: string | JSXAttributeName; end?: number | null }
+type JSXAttribute = BabelBaseNode & { type: 'JSXAttribute'; name?: JSXAttributeName }
+type JSXSpreadAttribute = BabelBaseNode & { type: 'JSXSpreadAttribute' }
+type JSXOpeningElement = BabelBaseNode & {
+  type: 'JSXOpeningElement'
+  name?: JSXOpeningName
+  attributes?: (JSXAttribute | JSXSpreadAttribute)[]
+  typeArguments?: { end?: number | null } | null
+  typeParameters?: { end?: number | null } | null
+}
+
 // @babel/traverse 在不同 bundler 下 ESM/CJS interop 形态不一致, 兜底取 default.
-const traverse = ((_traverse as any).default ?? _traverse) as typeof _traverse
+const traverse = ((_traverse as unknown as { default?: typeof _traverse }).default ?? _traverse) as typeof _traverse
 
 // rh-visual-edit: 独立 Vite plugin, 给每个 JSX 元素加 data-rh-src="<rel>:<line>:<col>".
 // 不依赖 @vitejs/plugin-react 的 babel hook (plugin-react v6+ 已切到 oxc, 不再接受 babel 选项).
@@ -26,7 +43,7 @@ function rhSourcePlugin() {
       const cleanId = id.split('?')[0]
       if (!/\.(jsx|tsx)$/.test(cleanId)) return null
       if (cleanId.includes('/node_modules/')) return null
-      let ast: any
+      let ast: ReturnType<typeof babelParse> | null
       try {
         ast = babelParse(code, {
           sourceType: 'module',
@@ -41,12 +58,12 @@ function rhSourcePlugin() {
       const filename = rel.replace(/\\/g, '/')
       const ms = new MagicString(code)
       traverse(ast, {
-        JSXOpeningElement(p: any) {
+        JSXOpeningElement(p: NodePath<JSXOpeningElement>) {
           const node = p.node
           const loc = node.loc
           if (!loc) return
-          const exists = node.attributes.some(
-            (a: any) => a.type === 'JSXAttribute' && a.name && a.name.name === 'data-rh-src',
+          const exists = (node.attributes ?? []).some(
+            a => a.type === 'JSXAttribute' && (a as JSXAttribute).name?.name === 'data-rh-src',
           )
           if (exists) return
           const nameNode = node.name

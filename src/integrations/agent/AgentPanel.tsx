@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLatestRef } from '@/hooks/useLatestRef'
 import { useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { getBasename, pb } from '@/lib/pb'
@@ -27,8 +28,7 @@ type AgentModule = { mountAgentChat(element: HTMLElement, options: MountOptions)
 export function AgentPanel({ vm }: { vm: ReturnType<typeof useCanvas> }) {
   const { id = '' } = useParams()
   const element = useRef<HTMLDivElement>(null)
-  const latest = useRef(vm)
-  latest.current = vm
+  const latest = useLatestRef(vm)
   const [error, setError] = useState(false)
   const [retry, setRetry] = useState(0)
   const [authToken, setAuthToken] = useState(() => pb.authStore.isValid ? pb.authStore.token : '')
@@ -95,7 +95,7 @@ export function AgentPanel({ vm }: { vm: ReturnType<typeof useCanvas> }) {
     }
     void start().catch(() => { if (!disposed) setError(true) })
     return () => { disposed = true; unmount?.() }
-  }, [moduleUrl, baseUrl, id, retry, authToken])
+  }, [moduleUrl, baseUrl, id, retry, authToken, latest])
   if (!moduleUrl) return null
   return <>
     <div ref={element} />

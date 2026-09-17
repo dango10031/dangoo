@@ -78,7 +78,7 @@ function probeHealth(port: number, timeoutMs: number): Promise<AssistantHealth |
       xhr.onreadystatechange = () => {
         if (xhr.readyState !== 4) return
         if (xhr.status < 200 || xhr.status >= 300) return done(null)
-        let data: { ok?: boolean; version?: string; jianying?: unknown; photoshop?: unknown; illustrator?: unknown } | null = null
+        let data: { ok?: boolean; version?: string; jianying?: unknown; photoshop?: unknown; illustrator?: unknown } | null
         try { data = JSON.parse(xhr.responseText) } catch { data = null }
         if (!data?.ok) return done(null)
         done({

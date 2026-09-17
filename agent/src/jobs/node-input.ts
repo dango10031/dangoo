@@ -34,16 +34,18 @@ export function imageNodeInput(snapshot:CanvasSnapshot,nodeId:string,models:Reco
   return {nodeId,revision:snapshot.revision,body};
 }
 
+type CanvasDoc={rev?:number;cards?:Array<Record<string,unknown>>;view?:unknown};
+
 /** Append only the reserved result; preserve edits and a user's active result selection. */
-export function applyImageResult(doc:Record<string,any>,nodeId:string,operationId:string,result:Record<string,unknown>) {
+export function applyImageResult<T extends CanvasDoc>(doc:T,nodeId:string,operationId:string,result:Record<string,unknown>):{doc:T;applyState:'target_missing'|'conflict'|'applied'} {
   const cards=Array.isArray(doc.cards)?doc.cards:[];
-  const card=cards.find((c:any)=>c.id===nodeId);
+  const card=cards.find((c)=>c.id===nodeId);
   if(!card)return {doc,applyState:'target_missing' as const};
   if(card.kind!=='generate')return {doc,applyState:'conflict' as const};
-  const items=Array.isArray(card.results)?card.results:[];
-  if(items.some((r:any)=>r.agentOperationId===operationId))return {doc,applyState:'applied' as const};
+  const items=Array.isArray(card.results)?card.results as Array<Record<string,unknown>>:[];
+  if(items.some((r)=>r.agentOperationId===operationId))return {doc,applyState:'applied' as const};
   const item={...result,agentOperationId:operationId,itemStatus:'success',isVideo:false};
-  const next={...card,results:[...items,item]};
+  const next:Record<string,unknown>={...card,results:[...items,item]};
   if(!items.length&&!card.url){next.url=result.url;next.activeResultIndex=0;next.jobStatus='success';}
-  return {doc:{...doc,rev:(Number(doc.rev)||0)+1,cards:cards.map((c:any)=>c.id===nodeId?next:c)},applyState:'applied' as const};
+  return {doc:{...doc,rev:(Number(doc.rev)||0)+1,cards:cards.map((c)=>c.id===nodeId?next:c)} as T,applyState:'applied' as const};
 }

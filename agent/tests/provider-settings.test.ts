@@ -36,21 +36,23 @@ test('provider settings persist privately, redact reads and retain immutable run
   assert.equal(JSON.stringify(moved.provider()).includes('replacement-key'), false);
 });
 
-test('provider settings file permissions are private on POSIX', { skip: process.platform === 'win32' }, (t) => {
-  const directory = mkdtempSync(join(tmpdir(), 'agent-settings-permissions-'));
-  t.after(async () => {
-    await rm(directory, { recursive: true, force: true });
+if (process.platform !== 'win32') {
+  test('provider settings file permissions are private on POSIX', (t) => {
+    const directory = mkdtempSync(join(tmpdir(), 'agent-settings-permissions-'));
+    t.after(async () => {
+      await rm(directory, { recursive: true, force: true });
+    });
+    const file = join(directory, 'provider.json');
+    const defaults = { providerId: 'glm', model: 'glm-5.3-flash', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', apiKey: '' };
+    const settings = new ProviderSettingsManager(file, defaults, new ProviderRegistry());
+    settings.save({ apiKey: 'fixture-private-key' });
+    assert.equal(statSync(file).mode & 0o777, 0o600);
+    chmodSync(file, 0o644);
+    const moved = new ProviderSettingsManager(file, defaults, new ProviderRegistry());
+    assert.equal(moved.read().hasKey, true);
+    assert.equal(statSync(file).mode & 0o777, 0o600);
   });
-  const file = join(directory, 'provider.json');
-  const defaults = { providerId: 'glm', model: 'glm-5.3-flash', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', apiKey: '' };
-  const settings = new ProviderSettingsManager(file, defaults, new ProviderRegistry());
-  settings.save({ apiKey: 'fixture-private-key' });
-  assert.equal(statSync(file).mode & 0o777, 0o600);
-  chmodSync(file, 0o644);
-  const moved = new ProviderSettingsManager(file, defaults, new ProviderRegistry());
-  assert.equal(moved.read().hasKey, true);
-  assert.equal(statSync(file).mode & 0o777, 0o600);
-});
+}
 
 test('connection failures redact provider errors and testing does not persist candidate settings', async (t) => {
   const directory = mkdtempSync(join(tmpdir(), 'agent-settings-test-'));
@@ -62,7 +64,12 @@ test('connection failures redact provider errors and testing does not persist ca
     providerId: 'glm', model: 'old-model', baseUrl: 'https://provider.example/v1', apiKey: 'fixture-secret',
   }, registry);
   const initial = settings.read();
-  t.mock.method(settings, 'provider', () => ({ stream: async function* () { throw new Error('upstream echoed fixture-secret'); } }));
+  t.mock.method(settings, 'provider', () => ({
+    stream: async function* () {
+      yield { type: 'done', reason: 'stop' };
+      throw new Error('upstream echoed fixture-secret');
+    },
+  }));
   await assert.rejects(settings.test({ model: 'candidate' }), (error: Error) => {
     assert.match(error.message, /连接测试失败/);
     assert.equal(error.message.includes('fixture-secret'), false);

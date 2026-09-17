@@ -1,4 +1,4 @@
-import type { AssetGateway, AssetRef, AssetSearch, CanvasGateway, CanvasOperation, ToolContext, ToolDefinition, ToolResult } from '../contracts/index.js';
+import type { AssetGateway, AssetRef, AssetSearch, CanvasGateway, CanvasOperation, ToolDefinition, ToolResult } from '../contracts/index.js';
 import { IntegrationError } from './assets.js';
 import { GENERATION_PARAMETERS } from './canvas-operations.js';
 const refSchema={type:'object',properties:{assetId:{type:'string',minLength:1,maxLength:128},version:{type:'integer',minimum:1},role:{enum:['reference','edit_source','result']}},required:['assetId','version'],additionalProperties:false};

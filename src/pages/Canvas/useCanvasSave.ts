@@ -109,8 +109,7 @@ export function useCanvasSave({
       return next
     })
   }
-  const browserSessionIdRef = useRef('')
-  if (!browserSessionIdRef.current) browserSessionIdRef.current = currentSessionId()
+  const [browserSessionId] = useState(() => currentSessionId())
   const [localRestore, setLocalRestoreState] = useState<LocalRestoreValue>(null)
   const localRestoreRef = useRef<LocalRestoreValue>(null)
   const setLocalRestore = (value: LocalRestoreValue | ((previous: LocalRestoreValue) => LocalRestoreValue)) => {
@@ -184,6 +183,7 @@ export function useCanvasSave({
     const step = Math.min(retryStepRef.current[targetCanvasId] ?? 0, RETRY_BACKOFF_MS.length - 1)
     const base = RETRY_BACKOFF_MS[step]
     retryStepRef.current[targetCanvasId] = step + 1
+    // eslint-disable-next-line react-hooks/purity -- 指数退避只在失败回调里调度，抖动刻意跨进程隔离重试
     const jitter = base * 0.2 * (2 * Math.random() - 1)
     retryTimerRef.current[targetCanvasId] = setTimeout(() => {
       delete retryTimerRef.current[targetCanvasId]
@@ -202,9 +202,9 @@ export function useCanvasSave({
         title,
         doc: doc as unknown as Record<string, unknown>,
         savedAt: Date.now(),
-        sessionId: browserSessionIdRef.current,
+        sessionId: browserSessionId,
       }
-      return await putLocalSnapshot(targetCanvasId, browserSessionIdRef.current, snap)
+      return await putLocalSnapshot(targetCanvasId, browserSessionId, snap)
     } catch {
       return false
     }
@@ -312,11 +312,11 @@ export function useCanvasSave({
         retryStepRef.current[targetCanvasId] = 0
         // 云端确认: 内容快照已无用, 清本地盘
         if (wantFull) {
-          void clearLocalSnapshot(targetCanvasId, browserSessionIdRef.current)
+          void clearLocalSnapshot(targetCanvasId, browserSessionId)
           localSafeRef.current[targetCanvasId] = false
           if (wantForce) delete pendingForceRef.current[targetCanvasId]
           // 通知同浏览器其它标签页: 云端有新版本了
-          postCanvasMessage({ type: 'canvas-saved', canvasId: targetCanvasId, rev: serverRev, fromSession: browserSessionIdRef.current })
+          postCanvasMessage({ type: 'canvas-saved', canvasId: targetCanvasId, rev: serverRev, fromSession: browserSessionId })
         }
         if (isActiveCanvas(targetCanvasId)) {
           const stillDirty = saveDirtyRef.current[targetCanvasId]
@@ -436,7 +436,7 @@ export function useCanvasSave({
               logs: b.logs.slice(0, 500),
             },
             savedAt: Date.now(),
-            sessionId: browserSessionIdRef.current,
+            sessionId: browserSessionId,
             serverRev: conflict.serverRev,
             backedAt: Date.now(),
           })
@@ -528,7 +528,7 @@ export function useCanvasSave({
     const { canvasId: id, originSessionId } = r
     await deleteStaleSnapshot(id, originSessionId)
     // 同画布若还残留别的崩溃标签页快照, 一并清掉, 避免下次打开再弹
-    const rest = await listStaleSnapshots(id, browserSessionIdRef.current)
+    const rest = await listStaleSnapshots(id, browserSessionId)
     for (const s of rest) await deleteStaleSnapshot(id, s.originSessionId)
     if (!isActiveCanvasSession(id, token)) return
     // 内存里已灌的是云端文档, 补续它携带的生成任务轮询
@@ -650,15 +650,16 @@ export function useCanvasSave({
 
   // 内容变化: 全量保存(程序灌入服务端文档的一拍跳过, 避免打开/同步后无意义回存)
   useEffect(() => {
+    const timers = saveTimerRef.current
     if (suppressContentSaveRef.current > 0) {
       suppressContentSaveRef.current -= 1
       return
     }
     scheduleSave('full')
     return () => {
-      if (canvasId && saveTimerRef.current[canvasId]) {
-        clearTimeout(saveTimerRef.current[canvasId])
-        delete saveTimerRef.current[canvasId]
+      if (canvasId && timers[canvasId]) {
+        clearTimeout(timers[canvasId])
+        delete timers[canvasId]
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -666,15 +667,16 @@ export function useCanvasSave({
 
   // 视图变化(平移/缩放): 只保存视图(程序灌入服务端文档的一拍跳过)
   useEffect(() => {
+    const timers = saveTimerRef.current
     if (suppressViewSaveRef.current > 0) {
       suppressViewSaveRef.current -= 1
       return
     }
     scheduleSave('view')
     return () => {
-      if (canvasId && saveTimerRef.current[canvasId]) {
-        clearTimeout(saveTimerRef.current[canvasId])
-        delete saveTimerRef.current[canvasId]
+      if (canvasId && timers[canvasId]) {
+        clearTimeout(timers[canvasId])
+        delete timers[canvasId]
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -756,10 +758,12 @@ export function useCanvasSave({
       document.removeEventListener('visibilitychange', onHidden)
       window.removeEventListener('pagehide', onPageHide)
       clearTimers()
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- SPA 卸载时必须读取当前画布，而不是挂载时的 ID
       const lastId = lastCanvasIdRef.current
       const m = lastId ? marksOf(lastId) : null
       if (!lastId || !m || (!m.full && !m.view)) return
       // SPA 内路由离开: JS 环境仍存活, 先落盘再抢发
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- 卸载兜底必须读取最新的本地安全标记
       if (m.full && !localSafeRef.current[lastId]) {
         void dumpLocalSnapshotNow(lastId).then(ok => {
           if (ok) void sendPersist(lastId, { keepalive: true })
@@ -796,8 +800,6 @@ export function useCanvasSave({
     }
     window.addEventListener('beforeunload', onBeforeUnload)
     return () => window.removeEventListener('beforeunload', onBeforeUnload)
-    // 回调内全部读 ref, 只随画布 id 挂一次: 旧依赖每次编辑/任务回写都重订阅一次监听
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canvasId])
 
   // 网络恢复 / 定时退避双保险: 从离线回到在线, 立刻把所有画布的待发改动补发一次
@@ -828,7 +830,7 @@ export function useCanvasSave({
   useEffect(() => {
     return onCanvasMessage(msg => {
       if (msg.type !== 'canvas-saved' || !isActiveCanvas(msg.canvasId)) return
-      if (msg.fromSession === browserSessionIdRef.current) return
+      if (msg.fromSession === browserSessionId) return
       if (saveConflictRef.current || localRestoreRef.current) return
       const id = msg.canvasId
       const token = sessionTokenRef.current
@@ -873,6 +875,7 @@ export function useCanvasSave({
       if (!marks?.full && !marks?.view) return
       if (saveTimerRef.current[id]) {
         clearTimeout(saveTimerRef.current[id])
+        // eslint-disable-next-line react-hooks/immutability -- 事件回调里清理本画布的一次性保存定时器
         delete saveTimerRef.current[id]
       }
       clearRetryTimer(id)
@@ -902,7 +905,7 @@ export function useCanvasSave({
     requestQuickFullSave,
     flushAfterMediaSaved,
     resumeAfterAuth,
-    browserSessionIdRef,
+    browserSessionId,
     cloudPendingAtRestoreRef,
   }
 }

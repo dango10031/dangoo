@@ -342,6 +342,8 @@ const CanvasVmContext = createContext<{ current: CanvasVm } | null>(null)
 export function CanvasRuntimeProvider({ vm, children }: { vm: CanvasVm; children: ReactNode }) {
   // 上下文值是稳定的 ref 对象, 卡片组件读到的永远是最新 vm, 但上下文本身永不触发消费者重渲染
   const ref = useRef<CanvasVm>(vm)
+  // 这里是画布隔离渲染的性能边界: 上下文值保持稳定, 仅在重渲染时转发最新 vm。
+  // eslint-disable-next-line react-hooks/refs
   ref.current = vm
   return <CanvasVmContext.Provider value={ref}>{children}</CanvasVmContext.Provider>
 }

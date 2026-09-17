@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AgentClient } from './client';
 import { FloatingAgentChat } from './FloatingAgentChat';
+import { useLatestRef } from './useLatestRef';
 import type { AssetCardData, HostBridge, Selection } from './types';
 import { assetKey } from './types';
 import './demo.css';
@@ -87,15 +88,12 @@ export function App() {
   const [canvasNodes, setCanvasNodes] = useState<DemoNode[]>([]);
   const [canvasRevision, setCanvasRevision] = useState<number>();
   const [selectedNodeId, setSelectedNodeId] = useState('node-product');
-  const selectedRef = useRef(selectedNodeId);
   const [locatedNodeId, setLocatedNodeId] = useState<string>();
   const [previewAsset, setPreviewAsset] = useState<AssetCardData>();
   const [agentOpen, setAgentOpen] = useState(true);
-  selectedRef.current = selectedNodeId;
-  const canvasNodesRef = useRef(canvasNodes);
-  const canvasRevisionRef = useRef(canvasRevision);
-  canvasNodesRef.current = canvasNodes;
-  canvasRevisionRef.current = canvasRevision;
+  const selectedRef = useLatestRef(selectedNodeId);
+  const canvasNodesRef = useLatestRef(canvasNodes);
+  const canvasRevisionRef = useLatestRef(canvasRevision);
 
   const refreshCanvas = useCallback(async () => {
     try {
@@ -109,8 +107,7 @@ export function App() {
       // Keep the last known canvas while a transient refresh fails.
     }
   }, [client]);
-  const refreshCanvasRef = useRef(refreshCanvas);
-  refreshCanvasRef.current = refreshCanvas;
+  const refreshCanvasRef = useLatestRef(refreshCanvas);
 
   const refreshService = useCallback(async () => {
     setService((current) => ({ ...current, state: 'checking', message: undefined }));
@@ -133,7 +130,7 @@ export function App() {
     }
   }, [client, refreshCanvas]);
 
-  useEffect(() => { void refreshService(); }, [refreshService]);
+  useEffect(() => { void Promise.resolve().then(refreshService); }, [refreshService]);
   useEffect(() => {
     if (!locatedNodeId) return;
     const timer = window.setTimeout(() => setLocatedNodeId(undefined), 1200);
@@ -158,7 +155,7 @@ export function App() {
       if (asset) setPreviewAsset(asset);
     },
     onCanvasChanged: () => { void refreshCanvasRef.current(); },
-  }), []);
+  }), [selectedRef, canvasNodesRef, canvasRevisionRef, refreshCanvasRef]);
 
   const displayNodes = canvasNodes.length ? canvasNodes : DEMO_NODES;
 

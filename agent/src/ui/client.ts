@@ -195,6 +195,7 @@ export class AgentClient implements AgentClientLike {
    * Consumers receive only strictly increasing, already parsed events.
    */
   recoverEvents(sessionId: string, options: SessionEventsOptions = {}): AsyncIterable<SseEnvelope> {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const client = this;
     const maxReconnects = options.maxReconnects ?? this.defaultMaxReconnects;
     const delayMs = options.reconnectDelayMs ?? this.defaultReconnectDelayMs;

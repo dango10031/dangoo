@@ -49,6 +49,37 @@ function cellBounds(lines: number[], gapHalfRatio: number): Array<{ start: numbe
   return out
 }
 
+function GridStep({
+  label,
+  value,
+  onChange,
+}: {
+  label: string
+  value: number
+  onChange: (v: number) => void
+}) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="flex items-center overflow-hidden rounded-lg border border-border">
+        <button
+          className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={() => onChange(Math.max(0, value - 1))}
+        >
+          <Minus className="h-3.5 w-3.5" />
+        </button>
+        <span className="w-7 text-center text-sm font-medium text-foreground">{value}</span>
+        <button
+          className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          onClick={() => onChange(Math.min(8, value + 1))}
+        >
+          <Plus className="h-3.5 w-3.5" />
+        </button>
+      </span>
+    </span>
+  )
+}
+
 /** 宫格切分模式: 规则宫格(预设/横竖线数量)或自定义点击放置切割线; 间隔从线两侧扣除; 应用后逐格导出 PNG */
 export function GridMode({
   imageUrl,
@@ -191,13 +222,9 @@ export function GridMode({
         const ctx = canvas.getContext('2d')
         if (!ctx) continue
         ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height)
-        let blob: Blob | null = null
         try {
-          blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/png'))
-        } catch {
-          blob = null
-        }
-        if (blob) {
+          const blob = await new Promise<Blob | null>(res => canvas.toBlob(res, 'image/png'))
+          if (!blob) continue
           parts.push({
             blob,
             row: r,
@@ -208,41 +235,12 @@ export function GridMode({
             naturalH: canvas.height,
             name: `r${r + 1}_c${c + 1}`,
           })
+        } catch {
+          // Skip a cell that cannot be rasterized instead of failing the batch.
         }
       }
     }
     if (parts.length) onExport(parts)
-  }
-
-  function Step({
-    label,
-    value,
-    onChange,
-  }: {
-    label: string
-    value: number
-    onChange: (v: number) => void
-  }) {
-    return (
-      <span className="flex items-center gap-1.5">
-        <span className="text-xs text-muted-foreground">{label}</span>
-        <span className="flex items-center overflow-hidden rounded-lg border border-border">
-          <button
-            className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            onClick={() => onChange(Math.max(0, value - 1))}
-          >
-            <Minus className="h-3.5 w-3.5" />
-          </button>
-          <span className="w-7 text-center text-sm font-medium text-foreground">{value}</span>
-          <button
-            className="flex h-7 w-7 items-center justify-center text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            onClick={() => onChange(Math.min(8, value + 1))}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </button>
-        </span>
-      </span>
-    )
   }
 
   return (
@@ -277,8 +275,8 @@ export function GridMode({
         })}
         {mode === 'grid' ? (
           <>
-            <Step label="横向线" value={hCount} onChange={setHCount} />
-            <Step label="竖向线" value={vCount} onChange={setVCount} />
+            <GridStep label="横向线" value={hCount} onChange={setHCount} />
+            <GridStep label="竖向线" value={vCount} onChange={setVCount} />
             <span className="flex items-center gap-2">
               <span className="text-xs text-muted-foreground">间隔(px)</span>
               <input

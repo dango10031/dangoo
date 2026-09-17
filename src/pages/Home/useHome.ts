@@ -141,7 +141,7 @@ export function useHome() {
   }, [])
 
   useEffect(() => {
-    void refreshWallet()
+    Promise.resolve().then(refreshWallet)
   }, [account?.id, refreshWallet])
 
   const handleAuthSuccess = useCallback(() => {
@@ -216,7 +216,7 @@ export function useHome() {
   }, [loadingMore, canLoadMore])
 
   useEffect(() => {
-    void loadCanvases()
+    Promise.resolve().then(loadCanvases)
   }, [loadCanvases])
 
   const createCanvas = useCallback(async () => {

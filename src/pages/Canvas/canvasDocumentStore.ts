@@ -68,8 +68,6 @@ function resolveStateAction<T>(value: SetStateAction<T>, previous: T): T {
 
 export function createCanvasDocumentStore(initialCanvasId = ''): CanvasDocumentStore {
   const buckets: Record<string, CanvasDocBucket> = {}
-  let store!: CanvasDocumentStore
-
   function captureBucket(canvasId?: string): CanvasDocBucket | undefined {
     const state = store.getState()
     const id = canvasId ?? state.activeCanvasId
@@ -141,7 +139,7 @@ export function createCanvasDocumentStore(initialCanvasId = ''): CanvasDocumentS
     setProjectAssets: value => updateDocumentField('projectAssets', value),
   }))
 
-  store = Object.assign(base, {
+  const store: CanvasDocumentStore = Object.assign(base, {
     getBucket: (canvasId: string) => {
       if (canvasId && canvasId === store.getState().activeCanvasId) return captureBucket(canvasId)
       return buckets[canvasId]

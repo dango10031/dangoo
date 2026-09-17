@@ -41,7 +41,7 @@ export function RechargeDialog({ open, onOpenChange, balance, onRecharged }: Rec
   }
 
   useEffect(() => {
-    if (open) void loadList()
+    if (open) void Promise.resolve().then(loadList)
   }, [open])
 
   const amt = Number(amount)

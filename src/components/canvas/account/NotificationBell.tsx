@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLatestRef } from '@/hooks/useLatestRef'
 import { Bell, Check, Wallet } from 'lucide-react'
 import { markNotificationRead, type NotificationItem } from '@/lib/wallet'
 import { refreshNotifications, subscribeNotifications } from '@/lib/notificationsPoller'
@@ -20,8 +21,7 @@ export function NotificationBell({ onBalanceChanged }: { onBalanceChanged?: () =
   const menuRef = useRef<HTMLDivElement | null>(null)
   // 回调放进 ref: 调用方传内联函数时每次渲染都是新引用, 不能进 effect/回调依赖,
   // 否则画布高频重渲染会反复重订阅账号事件并立即拉一次通知, 把接口打到 429。
-  const onBalanceChangedRef = useRef(onBalanceChanged)
-  onBalanceChangedRef.current = onBalanceChanged
+  const onBalanceChangedRef = useLatestRef(onBalanceChanged)
 
   // 统一通知数据源(跨组件/跨标签共享, 内部已做单飞、45s 冷却与 429 退避):
   // 首次数据只建立基线不弹窗, 之后出现的新未读 -> toast
@@ -47,7 +47,7 @@ export function NotificationBell({ onBalanceChanged }: { onBalanceChanged?: () =
       setItems(d.items)
       setUnread(d.unread)
     })
-  }, [])
+  }, [onBalanceChangedRef])
 
   // 登录态变化时启停轮询
   useEffect(() => {

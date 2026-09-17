@@ -74,12 +74,8 @@ function sameLocalOrigin(origin: string, hostHeader: string | undefined): boolea
 }
 
 function isWildcardHost(host: string): boolean {
-  const normalized = host.replace(/^[[]|[]]$/g, '').toLowerCase();
+  const normalized = host.replace(/^\[|\]$/g, '').toLowerCase();
   return normalized === '0.0.0.0' || normalized === '::' || normalized === '::0' || normalized === '*' || normalized === '';
-}
-
-function jsonBytes(value: unknown): number {
-  return new TextEncoder().encode(JSON.stringify(value)).byteLength;
 }
 
 function writeJson(res: ServerResponse, status: number, value: unknown, origin?: string): void {
@@ -117,6 +113,8 @@ async function readJson(req: IncomingMessage, maxBytes: number): Promise<Record<
 function decodePath(value: string): string {
   try {
     const decoded = decodeURIComponent(value);
+    // 路径参数必须拒绝协议控制字符; 规则本身依赖这些范围, 局部豁免误报
+    // eslint-disable-next-line no-control-regex
     if (!decoded || decoded.length > 256 || /[\u0000-\u001f\u007f]/.test(decoded)) throw new Error('invalid path');
     return decoded;
   } catch { throw new HttpError(400, 'invalid path parameter', 'invalid_path'); }
@@ -315,15 +313,15 @@ export function createAgentServer(runtime: AgentRuntime, options: AgentServerOpt
         res.setHeader('Connection', 'keep-alive');
         if (origin) res.setHeader('Access-Control-Allow-Origin', origin);
         res.flushHeaders();
-        let unsubscribe: (() => void) | undefined;
-        let heartbeat: ReturnType<typeof setInterval> | undefined;
+        const subscription: { stop?: () => void } = {};
+        const heartbeatRef: { id?: ReturnType<typeof setInterval> } = {};
         const cleanup = () => {
-          if (unsubscribe) unsubscribe();
-          if (heartbeat) clearInterval(heartbeat);
+          subscription.stop?.();
+          if (heartbeatRef.id) clearInterval(heartbeatRef.id);
         };
         res.on('close', cleanup);
-        unsubscribe = runtime.subscribe(session.id, (event) => writeSse(res, event), after);
-        heartbeat = setInterval(() => {
+        subscription.stop = runtime.subscribe(session.id, (event) => writeSse(res, event), after);
+        heartbeatRef.id = setInterval(() => {
           if (res.destroyed || res.writableEnded) { cleanup(); return; }
           res.write(`: heartbeat ${Date.now()}\n\n`);
         }, heartbeatMs);
@@ -335,7 +333,7 @@ export function createAgentServer(runtime: AgentRuntime, options: AgentServerOpt
         const settings = options.providerSettings?.read();
         if (settings && !runtime.store.getActiveRun(session.id)) runtime.store.setSessionProvider(session.id, settings.providerId, settings.model);
         const text = asString(body.text, 'text', maxTextLength);
-        let selection = body.selection;
+        const selection = body.selection;
         if (selection !== undefined && (typeof selection !== 'object' || selection === null || Array.isArray(selection))) throw new HttpError(400, 'selection must be an object', 'invalid_input');
         const skillNames = body.skillNames;
         if (skillNames !== undefined && (!Array.isArray(skillNames) || skillNames.some((item) => typeof item !== 'string'))) throw new HttpError(400, 'skillNames must be an array of strings', 'invalid_input');

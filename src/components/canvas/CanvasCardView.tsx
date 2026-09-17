@@ -1,4 +1,5 @@
 import { memo, useEffect, useRef, useState } from 'react'
+import { useLatestRef } from '@/hooks/useLatestRef'
 import {
   AudioLines,
   Blend,
@@ -111,8 +112,7 @@ function LodImg({
 }) {
   const [shown, setShown] = useState(src || fallback)
   // 回退链每渲染引用可能不同, 经 ref 读取, effect 只在主 src 变化(换档/换图)时重走
-  const chainRef = useRef<string[]>([])
-  chainRef.current = [src, ...(fallbacks ?? []), fallback].filter((u): u is string => !!u)
+  const chainRef = useLatestRef([src, ...(fallbacks ?? []), fallback].filter((u): u is string => !!u))
   useEffect(() => {
     let alive = true
     let i = 0

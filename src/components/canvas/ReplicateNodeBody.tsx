@@ -161,15 +161,14 @@ export function ReplicateNodeBody({
   externalHoverSlot?: { cardId: string; slot: RepSlot } | null
 }) {
   const rs = card.repState
-  if (!rs) return null
-  const analyzing = rs.stage === 'analyzing'
-  const generating = rs.stage === 'generating'
+  const analyzing = rs?.stage === 'analyzing'
+  const generating = rs?.stage === 'generating'
   const imageChannels = p.modelOptions.filter(o => o.media === 'image')
   const eff = p.effectiveRepUrls(card.id)
   const effSlots = p.effectiveRepSlots(card.id)
-  const foldType = rs.foldType ?? 'tri'
-  const triFold = rs.triFold ?? 'wrap'
-  const hasPrompts = !!(rs.frontPrompt || rs.backPrompt)
+  const foldType = rs?.foldType ?? 'tri'
+  const triFold = rs?.triFold ?? 'wrap'
+  const hasPrompts = !!(rs?.frontPrompt || rs?.backPrompt)
   // 每个槽是否有专门连入的上游线(有则显示断开按钮)
   const connectedSlots = new Set(
     p.connections.filter(c => c.toId === card.id && c.toSlot).map(c => c.toSlot as RepSlot),
@@ -178,8 +177,8 @@ export function ReplicateNodeBody({
   // externalHoverSlot 缺省时(其它挂载路径)仍兼容读 VM 草稿状态。
   const hover = externalHoverSlot !== undefined ? externalHoverSlot : p.connectionDraft?.hoverSlot
   const slotLabel = (slot: RepSlot): string => {
-    if (slot === 'front') return rs.frontUrl ? '正面' : effSlots.front ? '正面·上游' : '正面'
-    if (slot === 'back') return rs.backUrl ? '背面' : effSlots.back ? (effSlots.back === effSlots.front ? '背面·同正面' : '背面·上游') : '背面'
+    if (slot === 'front') return rs?.frontUrl ? '正面' : effSlots.front ? '正面·上游' : '正面'
+    if (slot === 'back') return rs?.backUrl ? '背面' : effSlots.back ? (effSlots.back === effSlots.front ? '背面·同正面' : '背面·上游') : '背面'
     if (slot === 'logo') return 'Logo'
     return '二维码'
   }
@@ -191,12 +190,14 @@ export function ReplicateNodeBody({
   ]
 
   // 生图参数(分辨率/比例)按实际提交的图生渠道契约取可选项
-  const runModel = resolveRunModel(rs.genModel, true)
-  const modelInfo = p.getNodeModelInfo(runModel)
+  const runModel = rs ? resolveRunModel(rs.genModel, true) : ''
+  const modelInfo = rs ? p.getNodeModelInfo(runModel) : null
   useEffect(() => {
+    if (!runModel) return
     p.requestModelInfo(runModel)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [runModel])
+  if (!rs) return null
   const scalarOpts = (name: string) => modelInfo?.scalar_params?.find(sp => sp.name === name)?.enum ?? []
   const resOpts = scalarOpts('resolution')
   const arOpts = withAdaptiveRatio(scalarOpts('aspectRatio'))

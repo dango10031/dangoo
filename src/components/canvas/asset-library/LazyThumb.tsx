@@ -10,14 +10,11 @@ export function LazyThumb(props: ImgHTMLAttributes<HTMLImageElement> & { root?: 
   const ref = useRef<HTMLDivElement>(null)
   const [visible, setVisible] = useState(false)
   const [loaded, setLoaded] = useState(false)
+  const forceVisible = typeof IntersectionObserver === 'undefined'
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
-    if (typeof IntersectionObserver === 'undefined') {
-      setVisible(true)
-      return
-    }
     const ob = new IntersectionObserver(
       entries => {
         if (entries.some(en => en.isIntersecting)) {
@@ -33,7 +30,7 @@ export function LazyThumb(props: ImgHTMLAttributes<HTMLImageElement> & { root?: 
 
   return (
     <div ref={ref} className="h-full w-full">
-      {visible && (
+      {(visible || forceVisible) && (
         <img
           {...rest}
           src={mediaSrc(src as string)}

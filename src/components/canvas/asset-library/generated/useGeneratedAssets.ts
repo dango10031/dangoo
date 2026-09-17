@@ -172,18 +172,20 @@ export function useGeneratedAssets(active: boolean): GeneratedAssetsVm {
 
   useEffect(() => {
     if (!active) return
-    if (!loggedIn) {
-      sessionCache = null
-      setAssets([])
-      return
-    }
-    if (sessionCache) {
-      setAssets(sessionCache.assets)
-      setCanvasesCount(sessionCache.canvasesCount)
-      setTruncated(sessionCache.truncated)
-      return
-    }
-    void runLoad(false)
+    void Promise.resolve().then(() => {
+      if (!loggedIn) {
+        sessionCache = null
+        setAssets([])
+        return
+      }
+      if (sessionCache) {
+        setAssets(sessionCache.assets)
+        setCanvasesCount(sessionCache.canvasesCount)
+        setTruncated(sessionCache.truncated)
+        return
+      }
+      void runLoad(false)
+    })
   }, [active, loggedIn, runLoad])
 
   const refresh = useCallback(() => {

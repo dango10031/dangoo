@@ -21,7 +21,7 @@ import type {
 } from '../contracts/index.js';
 import { ContextManager } from '../context/index.js';
 import { SkillRegistry } from '../skills/index.js';
-import { AsyncMutex, KeyedMutex } from './mutex.js';
+import { KeyedMutex } from './mutex.js';
 import { SqliteStore } from './store.js';
 import { ToolRegistry } from './tool-registry.js';
 import { ToolScheduler, operationIdFor, type ToolExecutionRequestWithEmit } from './tool-scheduler.js';
@@ -268,7 +268,6 @@ export class AgentRuntime {
   getSessionState(sessionId: string): SessionState {
     const session = this.getSession(sessionId);
     const runs = this.store.listRuns(sessionId);
-    const events = this.store.listEvents(sessionId, 0, 1);
     const latest = runs[0];
     return { session, runs, latestRun: latest, messages: this.store.listMessages(sessionId), eventSequence: this.store.latestEventSequence(sessionId) };
   }
@@ -699,7 +698,7 @@ export class AgentRuntime {
     const session = this.getSession(initial.sessionId);
     const controller = new AbortController();
     this.controllers.set(runId, controller);
-    let run = initial;
+    const run = initial;
     try {
       if (this.store.isStopRequested(runId)) { this.transition(runId, 'stopped', undefined, '用户已停止'); return; }
       const durableWait = this.store.getPendingWait(run.id);
@@ -1140,7 +1139,7 @@ export class AgentRuntime {
     return this.store.appendMessage({ id: randomUUID(), sessionId, runId, role: 'tool', content: result.content, callId });
   }
 
-  private appendUserMessage(sessionId: string, runId: string, text: string, selection?: Selection): import('../contracts/index.js').Message {
+  private appendUserMessage(sessionId: string, runId: string, text: string, _selection?: Selection): import('../contracts/index.js').Message {
     const content: ContentPart[] = [{ type: 'text', text }];
     return this.store.appendMessage({ id: randomUUID(), sessionId, runId, role: 'user', content });
   }
@@ -1189,7 +1188,7 @@ export class AgentRuntime {
         this.publish(sessionId, { runId: run.id, turnId: run.turnId, type: 'skill.loaded', data: { name, revision: snapshot.skills.skills.find((skill) => skill.name === name)?.revision } });
       } catch (error) {
         this.publish(sessionId, { runId: run.id, turnId: run.turnId, type: 'skill.unavailable', data: { name, error: errorMessage(error) } });
-        throw new Error(`Skill ${name} is unavailable in the frozen snapshot: ${errorMessage(error)}`);
+        throw new Error(`Skill ${name} is unavailable in the frozen snapshot: ${errorMessage(error)}`, { cause: error });
       }
     }
     if (snapshotChanged) this.store.saveRunSnapshot(run.id, this.serializeSnapshot(snapshot));

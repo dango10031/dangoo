@@ -1,6 +1,6 @@
 import {fromDangoo} from '../adapters/pocketbase-mapping.js';
 import {imageNodeInput,applyImageResult} from './node-input.js';
-declare const $app:any,$os:any,$http:any,$security:any,Record:any,Collection:any;
+declare const $app:any,$os:any,$http:any,Record:any,Collection:any;
 const collection='agent_node_jobs';
 const families=[
   ['gpt-image-2','gpt-image-2-image-to-image-official-stable'],
@@ -14,18 +14,18 @@ const json=(r:any,key:string)=>JSON.parse(String(r.get(key)||'null'));
 const fail=(code:string):never=>{throw new Error(code);};
 export function enabled(){return /^http:\/\/(127\.0\.0\.1|localhost):\d{2,5}$/.test(String($os.getenv('AGENT_AIGC_INTERNAL_URL')||''));}
 export function bootstrap(){
-  try{$app.findCollectionByNameOrId(collection);return;}catch{}
+  try{$app.findCollectionByNameOrId(collection);return;}catch{/* collection already exists */}
   $app.save(new Collection({type:'base',name:collection,listRule:null,viewRule:null,createRule:null,updateRule:null,deleteRule:null,
     fields:[{name:'owner',type:'text',required:true,max:190},{name:'canvas',type:'text',required:true,max:128},{name:'operation_id',type:'text',max:128},{name:'payload',type:'json'},{name:'created',type:'autodate',onCreate:true}],
     indexes:['CREATE UNIQUE INDEX agent_node_job_operation ON agent_node_jobs (owner, canvas, operation_id) WHERE operation_id != \'\'']}));
 }
 function canvas(app:any,id:string,owner:string){
-  let r:any;try{r=app.findRecordById('canvases',id);}catch{}
+  let r:any;try{r=app.findRecordById('canvases',id);}catch{/* missing canvas */}
   if(!r||String(r.get('rh_user_id'))!==owner||r.getBool('is_deleted'))fail('CANVAS_NOT_FOUND');
   return r;
 }
 function owned(app:any,id:string,owner:string,canvasId:string){
-  let r:any;try{r=app.findRecordById(collection,id);}catch{}
+  let r:any;try{r=app.findRecordById(collection,id);}catch{/* missing job */}
   if(!r||String(r.get('owner'))!==owner||String(r.get('canvas'))!==canvasId)fail('JOB_NOT_FOUND');
   return r;
 }

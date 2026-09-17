@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useLatestRef } from '@/hooks/useLatestRef'
 import { Camera, Eraser, FastForward, ImagePlus, Loader2, SkipBack, SkipForward, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -60,16 +61,15 @@ function FrameCaptureEditor({ p, cardId, onClose }: { p: CanvasVm; cardId: strin
   const pendingCaptureRef = useRef(0)
   const [captureBusy, setCaptureBusy] = useState(false)
 
-  const framesRef = useRef<CapturedFrame[]>([])
-  framesRef.current = frames
+  const framesRef = useLatestRef(frames)
 
   // 卸载(关弹窗/换源卡)统一释放本地预览地址
   useEffect(() => {
     return () => {
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- 卸载时必须撤销最新帧列表上的全部 URL
       framesRef.current.forEach(f => URL.revokeObjectURL(f.objectUrl))
     }
-  }, [])
+  }, [framesRef])
 
   const onLoadedMetadata = () => {
     const v = videoRef.current
@@ -203,7 +203,6 @@ function FrameCaptureEditor({ p, cardId, onClose }: { p: CanvasVm; cardId: strin
         return
       }
       for (const t of fresh) {
-        // eslint-disable-next-line no-await-in-loop
         await grabAt(t)
       }
     })

@@ -55,12 +55,9 @@ export function GeneratedAssetPreviewDialog({
   onCopyLink: (asset: GeneratedAsset) => void
   onDownload: (asset: GeneratedAsset) => void
 }) {
-  const [copiedPrompt, setCopiedPrompt] = useState(false)
   const src = asset ? mediaSrc(asset.url) : undefined
-
-  useEffect(() => {
-    setCopiedPrompt(false)
-  }, [asset?.id])
+  const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null)
+  const copiedPrompt = !!asset && copiedPromptId === asset.id
 
   useEffect(() => {
     if (!asset) return
@@ -76,9 +73,9 @@ export function GeneratedAssetPreviewDialog({
     if (!asset?.prompt) return
     try {
       await navigator.clipboard.writeText(asset.prompt)
-      setCopiedPrompt(true)
+      setCopiedPromptId(asset.id)
       toast.success('提示词已复制')
-      setTimeout(() => setCopiedPrompt(false), 1500)
+      setTimeout(() => setCopiedPromptId(current => current === asset.id ? null : current), 1500)
     } catch {
       toast.error('复制失败, 请手动复制')
     }

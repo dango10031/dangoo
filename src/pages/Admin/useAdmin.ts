@@ -59,7 +59,7 @@ export function useAdmin() {
   }, [])
 
   useEffect(() => {
-    if (authReady && wallet?.is_admin && range !== 'custom') void load(range)
+    if (authReady && wallet?.is_admin && range !== 'custom') Promise.resolve().then(() => load(range))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authReady, wallet?.is_admin, range])
 
@@ -118,7 +118,7 @@ export function useAdmin() {
 
   // 切换时间范围时，若正在下钻则带着新范围刷新该用户
   useEffect(() => {
-    if (drillEmail) void loadUser(drillEmail)
+    if (drillEmail) Promise.resolve().then(() => loadUser(drillEmail))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range, start, end])
 
@@ -138,7 +138,7 @@ export function useAdmin() {
 
   useEffect(() => {
     if (authReady && wallet?.is_admin && (tab === 'recharges' || tab === 'users' || tab === 'txns') && !overview) {
-      void loadOverview()
+      Promise.resolve().then(loadOverview)
     }
   }, [authReady, wallet?.is_admin, tab, overview, loadOverview])
 
