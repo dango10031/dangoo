@@ -337,7 +337,7 @@ export function FloatingAgentChat({
   const isOpen = open ?? internalOpen;
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [savedSettings, setSavedSettings] = useState<ProviderSettingsView>();
-  const configured = savedSettings?.hasKey ?? serviceConfigured;
+  const configured = savedSettings?.configured ?? serviceConfigured;
   const [attachmentBusy, setAttachmentBusy] = useState(false);
   const [localNotice, setLocalNotice] = useState<string>();
   const [composerFocused, setComposerFocused] = useState(false);
@@ -617,7 +617,7 @@ export function FloatingAgentChat({
       <div className="agent-brand"><span className="agent-brand__mark"><Icon name="spark" size={16} /></span><div><strong>Agent</strong><span>当前画布</span></div></div>
       <div className="agent-panel__actions"><button type="button" className={`agent-icon-button${settingsOpen ? ' agent-icon-button--active' : ''}`} onClick={() => setSettingsOpen((value) => !value)} aria-label="Agent 设置" aria-pressed={settingsOpen}><Icon name="settings" size={15} /></button><button type="button" className="agent-icon-button agent-icon-button--close" onClick={() => setOpen(false)} aria-label="收起 Agent"><Icon name="close" size={15} /></button></div>
     </header>
-    <div className="agent-panel__subhead"><StatusLine state={state} serviceState={savedSettings?.hasKey ? 'ready' : serviceState} providerName={savedSettings?.providerId ?? serviceConfig?.providerName ?? state.session?.providerId} model={savedSettings?.model ?? serviceConfig?.model ?? state.session?.model} /></div>
+    <div className="agent-panel__subhead"><StatusLine state={state} serviceState={savedSettings?.configured ? 'ready' : serviceState} providerName={savedSettings?.providerId ?? serviceConfig?.providerName ?? state.session?.providerId} model={savedSettings?.model ?? serviceConfig?.model ?? state.session?.model} /></div>
     {settingsOpen ? <ProviderSettings client={resolvedClient} onSaved={setSavedSettings} onClose={() => setSettingsOpen(false)} /> : null}
     <div className="agent-conversation" ref={conversationRef} onScroll={onConversationScroll} tabIndex={0} aria-label="对话消息">
       {state.messages.length === 0 ? <div className="agent-empty"><span className="agent-empty__mark"><Icon name="spark" size={17} /></span><p>描述你想在画布上完成的创作。</p><div className="agent-suggestions"><button type="button" onClick={() => store.setDraft('整理这组节点的构图')}>整理构图</button><button type="button" onClick={() => store.setDraft('分析当前选中的素材')}>分析选中素材</button></div></div> : null}

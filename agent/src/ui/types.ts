@@ -21,7 +21,6 @@ export interface ApiError extends Error {
 export interface AgentClientLike {
   providerSettings?(): Promise<ProviderSettingsView>;
   saveProviderSettings?(input: ProviderSettingsInput): Promise<ProviderSettingsView>;
-  testProviderSettings?(input: ProviderSettingsInput): Promise<unknown>;
   health(): Promise<unknown>;
   capabilities(): Promise<unknown>;
   createSession(input: { canvasId: string; providerId?: string; model?: string }): Promise<unknown>;
@@ -39,8 +38,8 @@ export interface AgentClientLike {
   compact(sessionId: string): Promise<unknown>;
 }
 
-export interface ProviderSettingsInput { providerId: string; model: string; baseUrl: string; apiKey?: string; }
-export interface ProviderSettingsView extends ProviderSettingsInput { hasKey: boolean; }
+export interface ProviderSettingsInput { providerId: 'dangoo-platform'; model: string; }
+export interface ProviderSettingsView extends ProviderSettingsInput { configured?: boolean; platformModels?: string[]; }
 
 export interface SseEnvelope {
   id?: string;

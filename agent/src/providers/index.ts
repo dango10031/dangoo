@@ -8,6 +8,7 @@ export {
   type OpenAICompatibleProviderOptions,
   type ProviderErrorKind,
 } from './openai-compatible.js';
+export { DangooPlatformProvider } from './dangoo-platform.js';
 export {
   ProviderRegistry,
   type ProviderMutationOptions,

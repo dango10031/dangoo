@@ -115,7 +115,6 @@ export async function callLlmWithFallback(modelName: string, opts: LlmCallOption
   const timeoutId = window.setTimeout(() => ctrl.abort(), CHAT_ABORT_MS)
   if (opts.signal) opts.signal.addEventListener("abort", () => ctrl.abort())
 
-  let initialFailed: boolean
   try {
     let res = await fetch(llmUrl("chat", modelName), {
       method: "POST",
@@ -155,14 +154,11 @@ export async function callLlmWithFallback(modelName: string, opts: LlmCallOption
         usage: data.usage,
       }
     }
-    initialFailed = true
   } catch {
-    initialFailed = true
+    // 首次请求失败后由异步轮询确认结果。
   } finally {
     window.clearTimeout(timeoutId)
   }
-
-  if (!initialFailed) return { ok: false, status: "failed", text: "", error: "unknown" }
 
   let notFoundCount = 0
   for (let i = 0; i < POLL_ATTEMPTS; i++) {

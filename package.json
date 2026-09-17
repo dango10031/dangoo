@@ -5,12 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "npm run agent:build && tsc -b && vite build",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "agent:install": "npm --prefix agent ci",
-    "agent:dev": "npm --prefix agent run dev",
-    "agent:build": "npm --prefix agent run typecheck && npm --prefix agent run build:server && npm --prefix agent run build:widget && node scripts/prepare-agent.mjs"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -61,8 +58,7 @@
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "vaul": "^1.1.2",
-    "zod": "^4.4.3",
-    "zustand": "^5.0.15"
+    "zod": "^4.4.3"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

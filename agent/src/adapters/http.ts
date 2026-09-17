@@ -227,6 +227,10 @@ export class OwnerScopedHttpDangooGateway implements CanvasGateway, AssetGateway
     }
   }
 
+  tokenForScope(scope: Scope): string {
+    return this.tokenFor(scope);
+  }
+
   private async identity(token: string): Promise<BridgeIdentity> {
     const response = await this.fetcher(new URL('identity', this.base), {
       method: 'GET',

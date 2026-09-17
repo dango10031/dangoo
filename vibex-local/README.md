@@ -28,34 +28,6 @@ powershell -ExecutionPolicy Bypass -File .\vibex-local\start-windows.ps1
 The app opens at `http://127.0.0.1:8000` and PocketBase runs at `http://127.0.0.1:7000`; both ports must be free before starting.
 The local Vite config proxies `/__pb` to PocketBase, matching the VibeX online runtime path.
 
-### Agent development on Windows
-
-Install dependencies on the Windows machine itself; do not copy `node_modules`
-from macOS/Linux because `better-sqlite3` includes a native binary. From the
-repository root in PowerShell:
-
-```powershell
-npm.cmd --prefix agent ci
-npm.cmd --prefix agent test
-npm.cmd --prefix agent run smoke:mock
-```
-
-For the isolated Agent preview, run `npm.cmd --prefix agent run dev:mock` and
-`npm.cmd --prefix agent run dev:ui` in separate terminals. The UI is at
-`http://127.0.0.1:5173`; these commands do not invoke paid generation.
-
-The test suite keeps configuration persistence/redaction and resource traversal
-checks enabled on Windows. Exact POSIX `0600` permissions are checked only on
-POSIX systems: Windows uses inherited NTFS ACLs, and Node's `stat().mode` cannot
-prove an owner-only ACL. Store real `AGENT_DATA_DIR` contents in a private user
-directory with suitable ACLs, not a shared folder. File-symlink tests report a
-specific skip only if Windows denies link creation; directory-junction containment
-is tested separately. Administrator mode is not required for normal development.
-
-Browser smoke scripts accept native paths (including spaces) in
-`PLAYWRIGHT_MODULE`; failure screenshots use the operating system's temporary
-directory. CI runs tests and the integrated build on Windows and Linux with Node 22.
-
 ## Requirements
 
 - Node.js 20.19+ or 22.12+

@@ -1,63 +1,62 @@
 import { chmodSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { OpenAICompatibleProvider, ProviderRegistry } from '../providers/index.js';
-import type { ModelCapabilities } from '../contracts/index.js';
+import { ProviderRegistry } from '../providers/index.js';
+import type { Provider } from '../contracts/index.js';
 
 export interface ProviderSettings {
-  providerId: string;
+  providerId: 'dangoo-platform';
   model: string;
-  baseUrl: string;
-  apiKey: string;
 }
 
 export class ProviderSettingsManager {
   private current: ProviderSettings;
-  constructor(private path: string, defaults: ProviderSettings, private registry: ProviderRegistry, private capabilities: ModelCapabilities = { contextWindow: 128000, maxOutputTokens: 8192, tools: true, vision: true, parallelTools: true }) {
-    this.current = existsSync(path) ? this.validate(JSON.parse(readFileSync(path, 'utf8')), defaults) : defaults;
+  constructor(private path: string, defaults: ProviderSettings, private registry: ProviderRegistry, private platformProvider?: Provider) {
+    if (!existsSync(path)) {
+      this.current = defaults;
+      return;
+    }
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
+    if (!this.platformProvider) {
+      this.current = defaults;
+    } else {
+      const model = typeof raw.model === 'string' ? raw.model : defaults.model;
+      const allowed = this.platformProvider.listPlatformModels?.() ?? [];
+      this.current = this.validate({ providerId: 'dangoo-platform', model: allowed.includes(model) ? model : defaults.model }, defaults);
+    }
+    if ('baseUrl' in raw || 'apiKey' in raw) {
+      const temporary = `${path}.${randomUUID()}.tmp`;
+      writeFileSync(temporary, JSON.stringify(this.current), { mode: 0o600 });
+      renameSync(temporary, path);
+    }
     if (existsSync(path)) chmodSync(path, 0o600);
   }
-  get configured() { return Boolean(this.current.apiKey); }
-  read() {
-    const { apiKey, ...publicSettings } = this.current;
-    return { ...publicSettings, hasKey: Boolean(apiKey) };
+  get configured() {
+    return Boolean(this.platformProvider) && this.current.model.length > 0
+      && (this.platformProvider?.listPlatformModels?.() ?? []).includes(this.current.model);
   }
-  provider(settings = this.current) {
-    return new OpenAICompatibleProvider({ id: settings.providerId, model: settings.model, baseUrl: settings.baseUrl,
-      capabilities: this.capabilities,
-      credential: settings.apiKey || undefined, extraBody: settings.providerId === 'glm' ? { thinking: { type: 'disabled' } } : undefined });
+  read() {
+    return { ...this.current, configured: this.configured, platformModels: this.platformProvider?.listPlatformModels?.() ?? [] };
+  }
+  provider() {
+    if (!this.platformProvider) throw new Error('平台模型不可用');
+    return this.platformProvider;
   }
   private validate(input: Record<string, unknown>, prior = this.current): ProviderSettings {
     const providerId = typeof input.providerId === 'string' ? input.providerId.trim() : prior.providerId;
+    if (!this.platformProvider || providerId !== 'dangoo-platform') throw new Error('仅支持 Dangoo 平台模型');
     const model = typeof input.model === 'string' ? input.model.trim() : prior.model;
-    const baseUrl = typeof input.baseUrl === 'string' ? input.baseUrl.trim() : prior.baseUrl;
-    const apiKey = typeof input.apiKey === 'string' && input.apiKey.trim() ? input.apiKey.trim() : prior.apiKey;
-    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(providerId) || !model || model.length > 256 || apiKey.length > 4096) throw new Error('Provider 配置无效');
-    const url = new URL(baseUrl);
-    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('API 地址须为不含凭据的 HTTPS 地址');
-    // A saved key is never forwarded to a newly typed endpoint without replacement.
-    if (baseUrl !== prior.baseUrl && !(typeof input.apiKey === 'string' && input.apiKey.trim())) throw new Error('更换 API 地址时请重新填写密钥');
-    return { providerId, model, baseUrl, apiKey };
-  }
-  async test(input: Record<string, unknown>) {
-    const settings = this.validate(input);
-    if (!settings.apiKey) throw new Error('请填写 API 密钥');
-    let done = false;
-    try {
-      for await (const event of this.provider(settings).stream({ model: settings.model, messages: [{ id: 'connection-test', createdAt: Date.now(), role: 'user', content: [{ type: 'text', text: 'Reply OK' }] }], tools: [], signal: AbortSignal.timeout(20_000), maxOutputTokens: 16 })) {
-        if (event.type === 'done') done = true;
-      }
-    } catch { throw new Error('连接测试失败，请检查地址、模型与密钥'); }
-    if (!done) throw new Error('连接测试未完整返回');
-    return { ok: true };
+    const models = this.platformProvider.listPlatformModels?.() ?? [];
+    if (!models.length) throw new Error('平台模型不可用');
+    if (!models.includes(model)) throw new Error('请选择平台模型');
+    return { providerId: 'dangoo-platform', model };
   }
   save(input: Record<string, unknown>) {
     const next = this.validate(input);
-    const provider = this.provider(next);
     const temporary = `${this.path}.${randomUUID()}.tmp`;
     writeFileSync(temporary, JSON.stringify(next), { mode: 0o600 });
     renameSync(temporary, this.path);
-    this.registry.upsert(provider);
     this.current = next;
+    this.registry.upsert(this.provider());
     return this.read();
   }
 }

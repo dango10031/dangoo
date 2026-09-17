@@ -332,7 +332,7 @@ export class AgentRuntime {
       }
       this.syncTools();
       const session = this.getSession(sessionId);
-      const provider = this.providers.get(session.providerId);
+      const provider = this.bindProvider(this.providers.get(session.providerId), session.scope);
       const toolSnapshot = this.toolSource.snapshot();
       const skillSnapshot = this.skills.snapshot();
       const initialSnapshot: FrozenRunSnapshot = {
@@ -870,7 +870,10 @@ export class AgentRuntime {
     if (existing) return existing;
     this.syncTools();
     let provider: Provider;
-    try { provider = this.providers.get(run.providerId); }
+    try {
+      const session = this.getSession(run.sessionId);
+      provider = this.bindProvider(this.providers.get(run.providerId), session.scope);
+    }
     catch { throw new SnapshotUnavailableError(`Provider ${run.providerId} is unavailable for run ${run.id}`); }
     const persisted = this.store.getRunSnapshot<PersistedRunSnapshot>(run.id);
     if (provider.revision !== run.providerRevision) throw new SnapshotUnavailableError(`Provider revision ${run.providerRevision} is unavailable for run ${run.id}`);
@@ -911,6 +914,10 @@ export class AgentRuntime {
     };
     this.snapshots.set(run.id, frozen);
     return frozen;
+  }
+
+  private bindProvider(provider: Provider, scope: { ownerId: string; canvasId: string }): Provider {
+    return provider.scoped?.(scope) ?? provider;
   }
 
   private serializeSnapshot(snapshot: FrozenRunSnapshot): PersistedRunSnapshot {

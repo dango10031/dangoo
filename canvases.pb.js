@@ -236,15 +236,22 @@ routerAdd("POST", "/api/canvases", function (e) {
 
 // PATCH /api/canvases/{id}  body 字段同 POST, 只更新 body 里出现的字段
 routerAdd("PATCH", "/api/canvases/{id}", function (e) {
+  // Manual saves and Agent commands must serialize the read/check/write together.
+  var outcome = null
+  function respond(status, data) { return { status: status, data: data } }
+  try {
+    $app.runInTransaction(function (txApp) {
+      outcome = (function ($app) {
+
   try {
     var id = e.request.pathValue("id")
-    if (!id) return e.json(400, { error: "id_required" })
+    if (!id) return respond(400, { error: "id_required" })
     var rec = null
     try { rec = $app.findRecordById("canvases", id) } catch (_) { rec = null }
-    if (!rec) return e.json(404, { error: "not_found" })
+    if (!rec) return respond(404, { error: "not_found" })
     var meU = ""
     try { meU = String(e.get("authEmail") || "").trim().toLowerCase() } catch (_) {}
-    if (!meU || String(rec.get("rh_user_id")) !== meU) return e.json(404, { error: "not_found" })
+    if (!meU || String(rec.get("rh_user_id")) !== meU) return respond(404, { error: "not_found" })
     var body = e.requestInfo().body || {}
     // 幂等: 仅内容保存(非纯视角)带 X-Idempotency-Key。命中本用户 10 分钟内同键直接回放上次成功结果
     var idemKey = ""
@@ -260,7 +267,7 @@ routerAdd("PATCH", "/api/canvases/{id}", function (e) {
         if (idemRecs && idemRecs.length > 0) {
           var idemHit = idemRecs[0]
           if (String(idemHit.get("canvas_id")) === id && Number(idemHit.get("expire_at") || 0) > new Date().getTime()) {
-            return e.json(200, rec.publicExport())
+            return respond(200, rec.publicExport())
           }
         }
         // 记录行 id 供保存成功后更新(不存在则新建), 避免同键重复落多行
@@ -296,11 +303,11 @@ routerAdd("PATCH", "/api/canvases/{id}", function (e) {
         // 内容保存必须带 canvas_rev: 不带(可绕过乐观锁的旧调用方/异常请求)直接 400, 带了但落后一律 409,
         // 由前端让用户在「加载最新 / 强制覆盖」间二选一, 杜绝旧快照静默覆盖新内容。
         if (!Object.prototype.hasOwnProperty.call(body, "canvas_rev")) {
-          return e.json(400, { error: "revision_required", message: "缺少版本号, 请刷新后再保存", canvas_rev: serverRev })
+          return respond(400, { error: "revision_required", message: "缺少版本号, 请刷新后再保存", canvas_rev: serverRev })
         }
         var baseRev2 = parseInt(body.canvas_rev, 10) || 0
         if (baseRev2 !== serverRev) {
-          return e.json(409, { error: "revision_conflict", message: "画布已在别处更新, 请刷新后再保存", canvas_rev: serverRev })
+          return respond(409, { error: "revision_conflict", message: "画布已在别处更新, 请刷新后再保存", canvas_rev: serverRev })
         }
         merged = incoming
       }
@@ -346,12 +353,20 @@ routerAdd("PATCH", "/api/canvases/{id}", function (e) {
         try { $app.logger().error("idem register FAIL: " + String(idemWErr && idemWErr.message || idemWErr)) } catch (_) {}
       }
     }
-    return e.json(200, rec.publicExport())
+    return respond(200, rec.publicExport())
   } catch (err) {
     var msg = String(err && err.message || err)
     try { $app.logger().error("canvases update FAIL: " + msg + " stack=" + String(err && err.stack || "").slice(0, 500)) } catch (_) {}
-    return e.json(500, { error: "update_failed", message: "操作失败, 请稍后重试", fingerprint: String(msg).slice(0, 80) })
+    return respond(500, { error: "update_failed", message: "操作失败, 请稍后重试", fingerprint: String(msg).slice(0, 80) })
   }
+
+      })(txApp)
+      if (!outcome || outcome.status >= 400) throw new Error("canvas_transaction_aborted")
+    })
+  } catch (_) {
+    if (!outcome || outcome.status < 400) outcome = { status: 500, data: { error: "update_failed" } }
+  }
+  return e.json(outcome.status, outcome.data)
 })
 // DELETE /api/canvases/{id}
 routerAdd("DELETE", "/api/canvases/{id}", function (e) {

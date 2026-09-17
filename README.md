@@ -1,19 +1,3 @@
-## 画布 Agent
-
-Agent 直接挂载在现有 `/canvas/:id` 页面，读取当前选中节点并同步节点与连线。核心源码位于独立的 `agent/` 包，无新增产品页面或 Agent 模式。
-
-```sh
-pnpm install --frozen-lockfile
-npm run agent:install
-npm run agent:build
-# 按 agent/README.md 配置 agent/.env 后启动服务
-npm run agent:dev
-# 另一个终端运行原画布
-npm run dev
-```
-
-服务配置、真实业务桥接与验证边界见 [Agent 接入说明](agent/README.md)；[当前验证记录](agent/docs/implementation-status.md)；[画布资产实施建议](agent/docs/canvas-assets.md)。部署时通过同源 `/agent-api` 代理到 Agent 服务，并部署配套 PocketBase hooks。
-
 # React + TypeScript + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

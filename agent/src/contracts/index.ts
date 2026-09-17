@@ -11,7 +11,7 @@ export interface ModelCapabilities {contextWindow:number; maxOutputTokens:number
 export interface ToolSpec {name:string; description:string; inputSchema:JsonSchema; revision:string;}
 export interface ProviderRequest {model:string; messages:Message[]; tools:ToolSpec[]; signal:AbortSignal; maxOutputTokens:number; temperature?:number;}
 export type ProviderEvent = {type:'text.delta'; text:string} | {type:'tool.call'; call:ToolCall} | {type:'usage'; usage:Usage} | {type:'done'; reason:'stop'|'tool_calls'|'length'};
-export interface Provider {id:string; revision:string; capabilities(model:string):ModelCapabilities; stream(request:ProviderRequest):AsyncIterable<ProviderEvent>;}
+export interface Provider {id:string; revision:string; capabilities(model:string):ModelCapabilities; stream(request:ProviderRequest):AsyncIterable<ProviderEvent>; scoped?(scope:Scope):Provider; listPlatformModels?: () => string[];}
 export interface ProviderRegistryLike {get(id:string):Provider; list():{id:string; revision:string}[];}
 export type RunState = 'queued'|'running'|'waiting_user'|'waiting_jobs'|'compacting'|'completed'|'partial'|'stopped'|'failed';
 export interface Scope {ownerId:string; canvasId:string;}

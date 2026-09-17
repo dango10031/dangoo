@@ -22,7 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-# Agent runtime secrets, generated widget and local session data
-.env
-public/agent/

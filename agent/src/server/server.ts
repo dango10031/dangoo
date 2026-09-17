@@ -255,7 +255,6 @@ export function createAgentServer(runtime: AgentRuntime, options: AgentServerOpt
         if (req.method === 'GET' && path.length === 2) { writeJson(res, 200, settings.read(), origin); return; }
         if (req.method === 'POST') {
           const input = await readJson(req, 16384);
-          if (path[2] === 'test') { writeJson(res, 200, await settings.test(input), origin); return; }
           if (path.length === 2) { writeJson(res, 200, settings.save(input), origin); return; }
         }
       } catch (error) { throw new HttpError(400, error instanceof Error ? error.message : '配置操作失败'); }

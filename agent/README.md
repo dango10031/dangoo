@@ -13,45 +13,37 @@
 ```sh
 npm run agent:install
 npm run agent:build
-cp agent/.env.example agent/.env
 ```
 
-在 `agent/.env` 填写 `GLM_API_KEY`，设置 `AGENT_CANVAS_MODE=http`，填入当前本地测试用户的 `AGENT_OWNER_ID`（业务邮箱）、`AGENT_CANVAS_ID`、`DANGOO_BRIDGE_URL` 及该用户的 `DANGOO_AUTH_TOKEN`。宿主 PocketBase 应运行配套 hooks。然后分别启动：
+设置 `AGENT_CANVAS_MODE=http`，填入当前本地测试用户的 `AGENT_OWNER_ID`（业务邮箱）、`AGENT_CANVAS_ID`、`DANGOO_BRIDGE_URL` 及该用户的 `DANGOO_AUTH_TOKEN`。宿主 PocketBase 应运行配套 hooks。然后分别启动：
 
 ```sh
 npm run agent:dev
 npm run dev
 ```
 
-在原画布页面使用右下角 Agent。原应用的 Vite 开发代理将 `/agent-api` 转发到本机 `4317`；生产需要相同路径的反向代理。`npm run build` 会构建 Agent runtime 和 widget，并将 widget 放入原应用的 `public/agent/`，最终随原应用静态产物发布。Provider 密钥仅在 Agent 服务端读取。
+在原画布页面使用右下角 Agent。原应用的 Vite 开发代理将 `/agent-api` 转发到本机 `4317`；生产需要相同路径的反向代理。`npm run build` 会构建 Agent runtime 和 widget，并将 widget 放入原应用的 `public/agent/`，最终随原应用静态产物发布。
 
-当前服务入口按单业务账号配置，HTTP 模式支持该账号有权限的多个画布。多用户部署需由可信认证入口提供用户与画布权限，并按主体选择业务凭据；不能把固定测试用户的服务直接开放到公网。`AGENT_TOKEN` 仅用于 Agent 服务认证，与 Provider 密钥不同。
+当前服务入口按单业务账号配置，HTTP 模式支持该账号有权限的多个画布。多用户部署需由可信认证入口提供用户与画布权限，并按主体选择业务凭据；不能把固定测试用户的服务直接开放到公网。`AGENT_TOKEN` 仅用于 Agent 服务认证。
 
-GLM-5.3-Flash 的真实流式工具调用已验证。没有密钥时显示未配置，不自动替换模拟模型。模型视觉输入和账户上下文限额尚未实测。
+Dangoo 平台模型通过 `/api/llm/*` 访问。模型不可用时显示未配置，不自动替换模拟模型。
 
 ### 内部联调工作台
 
 仅供开发者独立验证内核：设置 `AGENT_CANVAS_MODE=local` 后，在本包目录运行 `npm run dev` 和 `npm run dev:ui`。此入口保存独立 SQLite 画布，不是产品交付入口，也不连接原画布媒体生成或钱包。
 
-## 更换 Provider 或密钥
+## 选择平台模型
 
 HTTP 桥接模式按业务账号访问多个画布，建立会话前由业务桥接校验画布权限；每个画布保持自己的唯一会话。本地内部工作台仅开放 `AGENT_CANVAS_ID` 对应的测试画布。VibeX 托管桥接设置 `DANGOO_AUTH_HEADER=X-Pb-Auth`，直连 PocketBase 保持默认 `Authorization`。
 
-编辑仅供服务端读取的 `.env`，然后重启 `npm run dev`（构建版重启 `npm start`）。
+`AGENT_MODEL` 可作为启动默认模型；平台模型清单以 `/api/llm/models` 为准。用户也可在原画布悬浮框点击设置，只选择平台模型并保存。设置保存到服务端 `data/provider-settings.json`（权限 0600），旧配置里的 API 地址和密钥会在启动时清除。保存后下一轮对话采用新模型，正在执行的任务保留原快照。
 
 | 配置项 | 用途 |
 | --- | --- |
-| `AGENT_PROVIDER_ID` | Provider 标识，GLM 使用 `glm` |
-| `AGENT_PROVIDER_BASE_URL` | OpenAI-compatible API 基址 |
 | `AGENT_MODEL` | 实际发送给 Provider 的模型名 |
-| `GLM_API_KEY` | GLM 密钥 |
-| `AGENT_API_KEY` | 其他兼容 Provider 的密钥；非空时优先于 GLM 配置 |
-| `AGENT_CONTEXT_WINDOW` / `AGENT_MAX_OUTPUT_TOKENS` | 按实际 Provider 限额设置预算 |
 | `AGENT_MAX_MODEL_TURNS` | 单次运行最多模型往返次数，默认 128；到达上限保留进度并显示部分完成 |
 
-也可在原画布悬浮框点击设置，填写 Provider、模型、API 地址及密钥，测试连接后保存。设置保存到服务端 `data/provider-settings.json`（权限 0600），优先于环境默认值，页面只读到是否已配置。保存后下一轮对话采用新配置，正在执行的任务保留原快照。更换地址需重新填写密钥。
-
-`.env` 与 `data/` 已从版本控制排除。更换非兼容协议时，实现 `Provider` 接口并注册，无需改动 runtime、工具或 UI。
+`data/` 已从版本控制排除。
 
 ## 工程边界
 
@@ -112,7 +104,7 @@ npm test
 npm run build
 ```
 
-测试区分 Provider SSE fixtures、核心/SQLite真实执行、PocketBase hook模拟环境与UI状态测试。fixtures 不能证明 GLM 账户可用，也不能证明原 PocketBase 服务已经部署。最终验证记录在 [implementation-status.md](docs/implementation-status.md)。
+测试区分 Dangoo 平台 Provider、核心/SQLite真实执行、PocketBase hook模拟环境与UI状态测试。fixtures 不能证明平台模型账户可用，也不能证明原 PocketBase 服务已经部署。最终验证记录在 [implementation-status.md](docs/implementation-status.md)。
 
 线上原节点生成按用户确认的可用前提处理。Agent 的节点/钱包桥接已实现，待部署环境接线验收；资产服务待接入。原生 PocketBase 隔离回归已通过，使用测试认证。原应用集成构建通过，但不能替代多用户认证、浏览器视觉和部署验收。
 
@@ -120,7 +112,7 @@ npm run build
 
 启动宿主 PocketBase 时设置 `AGENT_AIGC_INTERNAL_URL=http://127.0.0.1:7000`（端口与实际服务一致），部署本分支的全部配套 hooks，包括钱包报价改动。Agent 服务仍使用该用户的 `DANGOO_AUTH_TOKEN`。内部调用复用业务鉴权、模型目录、钱包计价、提交及轮询，Agent 不读取媒体 Provider 密钥。
 
-用户明确要求的节点编辑直接执行；即将扣费且尚未授权时展示确认。用户可以在当前对话中用自然语言预先授权，Agent 判断范围和后续撤销，不设置额外金额、时长规则。用户授权原文只在当前会话核对，画布之间不共享上下文或授权。GLM 文本调用本身仍按配置 Provider 的计费方式执行。
+用户明确要求的节点编辑直接执行；即将扣费且尚未授权时展示确认。用户可以在当前对话中用自然语言预先授权，Agent 判断范围和后续撤销，不设置额外金额、时长规则。用户授权原文只在当前会话核对，画布之间不共享上下文或授权。
 
 报价绑定节点输入、连接和画布版本；提交最多扣除已确认报价，价格上涨则重新报价。已提交任务由服务端持续查询，停止对话不会伪造远端取消。结果转存后追加到原节点，保留并发手动修改及主图选择。未知提交按幂等记录对账，禁止自动重提。
 

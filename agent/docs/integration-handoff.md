@@ -17,8 +17,8 @@ Agent 核心、原画布挂载和首期图片节点桥接已实现。本轮增�
 | 能力 | 当前状态 | 注意事项 |
 | --- | --- | --- |
 | 独立 runtime、Tool/Provider/Skill Registry | 已实现并测试 | 内置 `fashion-ecommerce-image-set`，支持 `/`、按钮搜索、选择及移除；默认加载 builtin，workspace 同名优先 |
-| GLM-5.3-Flash | 真实文本流及工具调用通过 | 图片理解及账户真实上下文容量未实测 |
-| Provider 配置 | 服务实例级配置 | 仅 `AGENT_OWNER_ID` 指定的已认证管理员可管理；普通用户不能读取或修改配置 |
+| 平台模型 | 通过 Dangoo `/api/llm/*` 接入 | 模型清单和执行都复用原画布平台能力 |
+| Provider 配置 | 仅平台模型选择 | 用户在悬浮框选择模型；不支持外部 API 地址和密钥配置 |
 | 画布上下文 | 同一 owner + canvas 固定一个持久会话 | 已有重复历史保留，最早创建的会话作为主会话；旧重复会话没有 UI 切换入口 |
 | 自动压缩 | 默认 256,000 tokens 触发，保留原历史、工具配对及固定信息 | 更小 Provider 窗口提前触发；详见下文 |
 | 画布编辑 | 创建、修改、连接、布局、分组等 | 通过版本及幂等校验；不能把节点可编辑解释为所有节点均可运行 |
@@ -72,12 +72,10 @@ Provider 由管理员统一配置，保存在实例私有文件。HTTP 模式未
 | `AGENT_TOKEN` | Agent | 仅显式 local 工作台的可选访问令牌；HTTP 模式使用原画布登录凭据 |
 | `AGENT_DATA_DIR` | Agent | 可写且持久的本机目录，包含会话及私有配置 |
 | `AGENT_AIGC_INTERNAL_URL` | PocketBase | 本机 PB 的 HTTP 地址，端口与实际服务一致；缺失时 jobs 关闭 |
-| `AGENT_CONTEXT_WINDOW` | Agent | 模型实际容量，默认 128000，不能凭压缩目标扩大 |
-| `AGENT_MAX_OUTPUT_TOKENS` | Agent | 默认 8192，计入请求容量预留 |
 | `VITE_DANGOO_AGENT_MODULE_URL` | 前端构建 | 默认为同源 `/agent/dangoo-agent-widget.js` |
 | `VITE_DANGOO_AGENT_API_URL` | 前端构建 | 默认为同源 `/agent-api` |
 
-GLM/兼容 Provider 的环境配置见 `agent/.env.example`；设置面板保存值优先于环境默认值，下一轮生效，正在运行的请求保留快照。改变 API 地址需要重新填 key。不要将密钥放入 `VITE_*`、Git、前端存储或交接文档。
+Agent 不再读取或保存外部 API 地址、密钥和预算配置。`AGENT_MODEL` 只作为平台模型启动默认值；用户在设置面板保存后，下一轮对话采用新模型，正在运行的请求保留原快照。
 
 ### 4. 扣费与节点结果
 

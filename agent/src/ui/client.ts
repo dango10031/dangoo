@@ -123,7 +123,6 @@ export class AgentClient implements AgentClientLike {
 
   providerSettings() { return this.request('/settings/provider') as Promise<ProviderSettingsView>; }
   saveProviderSettings(input: ProviderSettingsInput) { return this.request('/settings/provider', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }) as Promise<ProviderSettingsView>; }
-  testProviderSettings(input: ProviderSettingsInput) { return this.request('/settings/provider/test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(input) }); }
 
   capabilities(): Promise<unknown> {
     return this.request('/capabilities');

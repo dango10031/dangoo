@@ -437,12 +437,14 @@ routerUse(function (e) {
   var isRechargeApi = path.indexOf("/api/recharges") === 0
   var isAdminApi = path.indexOf("/api/admin/") === 0
   var isGenSubmit = path.indexOf("/api/aigc/submit") === 0
+  var isAgentQuote = path === "/api/agent-bridge/v1/wallet-quote" && method === "POST"
   var isAiAppRun = path.indexOf("/api/aigc/ai-app/") === 0 && /\/run$/.test(path)
   var isLlmChat = path.indexOf("/api/llm/chat") === 0
   var isLlmPoll = path.indexOf("/api/llm/poll") === 0
 
   // 需登录的业务接口（非生成类）
   var protectedAny = false
+  if (path.indexOf("/api/agent-bridge/v1/") === 0) protectedAny = true
   try {
     if (path === "/api/aigc/upload" || path === "/api/aigc/history" ||
         path === "/api/aigc/price-preview" ||
@@ -589,7 +591,7 @@ routerUse(function (e) {
   // ---- LLM：仅需登录，不扣费 ----
   if (isLlmChat || isLlmPoll) { e.next(); return }
   // ---- 其余非生成类登录接口：放行 ----
-  if (!needCharge) { e.next(); return }
+  if (!needCharge && !isAgentQuote) { e.next(); return }
 
   // ---- 生成类：余额门 ----
   // fail-closed 计价: 只认服务端已知渠道。
@@ -694,6 +696,16 @@ routerUse(function (e) {
   // fail-closed: 未知渠道不允许用 0.30 兜底价提交, 必须先在服务端配置真实底价。
   if (!charge.known) {
     e.json(400, { ok: false, error: "model_not_priced", code: "MODEL_NOT_PRICED", message: "该生成渠道暂不可用, 请重新选择渠道", fingerprint: "unknown_model" })
+    return
+  }
+
+  if (isAgentQuote) {
+    e.json(200, { ok: true, estimatedPrice: charge.amount, currency: "CNY", priceText: "¥" + Number(charge.amount).toFixed(2), isFreeThisCall: charge.amount === 0 })
+    return
+  }
+
+  if (body.agentMaxCharge !== undefined && (!(Number(body.agentMaxCharge) >= 0) || charge.amount > Number(body.agentMaxCharge))) {
+    e.json(409, { error: "price_changed", message: "当前价格高于已确认金额，请重新报价" })
     return
   }
 

@@ -15,9 +15,14 @@ test('provider settings API protects owner, origins and secrets; new turns use s
   const directory = mkdtempSync(join(tmpdir(), 'agent-settings-http-'));
   const store = new SqliteStore();
   const registry = new ProviderRegistry();
+  const platformProvider = {
+    id: 'dangoo-platform', revision: 'platform', listPlatformModels: () => ['old-model', 'new-model'],
+    capabilities: () => ({ contextWindow: 16000, maxOutputTokens: 500, tools: true, vision: false, parallelTools: true }),
+    stream: async function* (): AsyncGenerator<ProviderEvent> { yield { type: 'done', reason: 'stop' }; },
+  } as Provider;
   const settings = new ProviderSettingsManager(join(directory, 'provider.json'), {
-    providerId: 'fixture', model: 'old-model', baseUrl: 'https://provider.example/v1', apiKey: '',
-  }, registry);
+    providerId: 'dangoo-platform', model: 'old-model',
+  }, registry, platformProvider);
   const requests: Array<{ model: string; providerModel: string }> = [];
   let release: (() => void) | undefined;
   const blocked = new Promise<void>((resolve) => { release = resolve; });
@@ -54,17 +59,17 @@ test('provider settings API protects owner, origins and secrets; new turns use s
     assert.equal((await request('settings/provider', { apiKey: 'stolen' }, 'other')).status, 403);
     assert.equal((await request('settings/provider', { apiKey: 'stolen' }, 'owner', 'https://evil.example')).status, 403);
     assert.equal((await fetch(`${base}/api/settings/provider`)).status, 401);
-    const saved = await request('settings/provider', { apiKey: 'fixture-secret' }, 'owner', base);
+    const saved = await request('settings/provider', { providerId: 'dangoo-platform', model: 'old-model', baseUrl: 'https://provider.example/v1' }, 'owner', base);
     assert.equal(saved.status, 200);
     assert.equal(saved.headers.get('cache-control'), 'no-store');
     assert.equal(saved.headers.get('access-control-allow-origin'), base);
     const savedBody = await saved.text();
     assert.equal(savedBody.includes('fixture-secret'), false);
-    assert.equal(JSON.parse(savedBody).hasKey, true);
-    const rejectedEndpoint = await request('settings/provider', { baseUrl: 'https://evil.example/v1' });
-    assert.equal(rejectedEndpoint.status, 400);
-    assert.equal((await rejectedEndpoint.text()).includes('fixture-secret'), false);
-    assert.equal(settings.read().baseUrl, 'https://provider.example/v1');
+    assert.equal(JSON.parse(savedBody).configured, true);
+    assert.deepEqual(JSON.parse(savedBody).platformModels, ['old-model', 'new-model']);
+    const legacyEndpoint = await request('settings/provider', { baseUrl: 'https://evil.example/v1' });
+    assert.equal(legacyEndpoint.status, 200);
+    assert.equal(settings.read().model, 'old-model');
     assert.equal((await (await fetch(`${base}/health`)).json() as { configured: boolean }).configured, true);
     const created = await request('sessions', { canvasId: 'canvas' });
     assert.equal(created.status, 201);

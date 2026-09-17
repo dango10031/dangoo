@@ -6,7 +6,7 @@ import { LocalCanvasGateway, OwnerScopedHttpDangooGateway, UnavailableAssetGatew
 import { AgentRuntime } from '../core/runtime.js';
 import { SqliteStore } from '../core/store.js';
 import { ToolRegistry } from '../core/tool-registry.js';
-import { ProviderRegistry, OpenAICompatibleProvider } from '../providers/index.js';
+import { ProviderRegistry, DangooPlatformProvider } from '../providers/index.js';
 import { SkillRegistry, type SkillRootSpec } from '../skills/index.js';
 import { AgentAuthenticationError, authTokenFromRequest, createAgentServer, listenAgentServer, type AgentServerOptions } from './server.js';
 import type { AssetGateway, CanvasGateway, Scope } from '../contracts/index.js';
@@ -87,6 +87,7 @@ export async function createEnvironmentRuntime(): Promise<EnvironmentRuntime> {
   let authenticateBridge: AgentServerOptions['authenticate'];
   let syncBridgeTools: () => void = () => {};
   let isolatedWorkbench = false;
+  let platformProvider: DangooPlatformProvider | null = null;
   if (canvasMode === 'local') {
     const local = new LocalCanvasGateway(join(dataDir, 'canvas-workbench.sqlite'));
     local.seed(scope, { canvasId, revision: 0, nodes: [], edges: [] });
@@ -99,6 +100,11 @@ export async function createEnvironmentRuntime(): Promise<EnvironmentRuntime> {
     const authHeader = env('DANGOO_AUTH_HEADER', 'Authorization');
     if (authHeader !== 'Authorization' && authHeader !== 'X-Pb-Auth') throw new Error('DANGOO_AUTH_HEADER must be Authorization or X-Pb-Auth');
     const bridge = new OwnerScopedHttpDangooGateway({ baseUrl, authHeader });
+    platformProvider = new DangooPlatformProvider({
+      baseUrl,
+      tokenForScope: scope => bridge.tokenForScope(scope),
+      authHeader: authHeader === 'X-Pb-Auth' ? 'X-Pb-Auth' : 'Authorization',
+    });
     canvas = bridge;
     assets = bridge;
     authenticateBridge = async (request) => {
@@ -119,26 +125,14 @@ export async function createEnvironmentRuntime(): Promise<EnvironmentRuntime> {
     throw new Error(`Unknown AGENT_CANVAS_MODE: ${canvasMode}; expected local or http`);
   }
 
-  const providerId = env('AGENT_PROVIDER_ID', 'glm');
-  const model = env('AGENT_MODEL', 'glm-5.3-flash');
-  const providerBaseUrl = env('AGENT_PROVIDER_BASE_URL', 'https://open.bigmodel.cn/api/paas/v4');
-  const apiKey = env('AGENT_API_KEY', env('GLM_API_KEY'));
-  const provider = new OpenAICompatibleProvider({
-    id: providerId,
-    baseUrl: providerBaseUrl,
-    model,
-    credential: apiKey || undefined,
-    extraBody: providerId === 'glm' ? { thinking: { type: 'disabled' } } : undefined,
-    capabilities: {
-      contextWindow: numberEnv('AGENT_CONTEXT_WINDOW', 128_000, 1_024, 2_000_000),
-      maxOutputTokens: numberEnv('AGENT_MAX_OUTPUT_TOKENS', 8_192, 128, 128_000),
-      tools: true,
-      vision: true,
-      parallelTools: true,
-    },
-  });
-  const providers = new ProviderRegistry([provider]);
-  const providerSettings = new ProviderSettingsManager(join(dataDir, 'provider-settings.json'), { providerId, model, baseUrl: providerBaseUrl, apiKey }, providers, provider.capabilities(model));
+  const providers = new ProviderRegistry(platformProvider ? [platformProvider] : []);
+  const platformModels = platformProvider?.listPlatformModels?.() ?? [];
+  const providerSettings = new ProviderSettingsManager(
+    join(dataDir, 'provider-settings.json'),
+    { providerId: 'dangoo-platform', model: platformModels[0] ?? '' },
+    providers,
+    platformProvider ?? undefined,
+  );
   if (providerSettings.configured) providers.upsert(providerSettings.provider());
   const skills = await loadSkills();
   const tools = new ToolRegistry(canvasMode === 'http' ? [] : createCanvasTools(canvas, assets));
@@ -154,7 +148,7 @@ export async function createEnvironmentRuntime(): Promise<EnvironmentRuntime> {
   };
   const store = new SqliteStore(join(dataDir, 'agent.sqlite'));
   const runtime = new AgentRuntime({
-    store, providers, tools, skills, context: new ContextManager(), canvas, assets, model,
+    store, providers, tools, skills, context: new ContextManager(), canvas, assets, model: providerSettings.read().model,
     limits: { maxModelTurns: numberEnv('AGENT_MAX_MODEL_TURNS', 128, 1, 10_000) },
     ...createNodeApprovalPolicy(canvas, store),
     systemPrompt: [
@@ -208,7 +202,7 @@ export async function startEnvironmentRuntime(): Promise<EnvironmentRuntime> {
   const address = environment.server.address();
   const rendered = typeof address === 'object' && address ? `${address.address}:${address.port}` : String(address ?? 'unknown');
   process.stdout.write(`Dangoo Agent listening on ${rendered}${environment.isolatedWorkbench ? ' (isolated local workbench)' : ''}\n`);
-  if (!environment.configured) process.stdout.write('AGENT_API_KEY / GLM_API_KEY is not configured; /health reports configured=false and messages return 503.\n');
+  if (!environment.configured) process.stdout.write('平台模型不可用；/health reports configured=false and messages return 503.\n');
   return environment;
 }
 
