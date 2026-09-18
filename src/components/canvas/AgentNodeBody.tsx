@@ -4,12 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { LodThumb } from '@/components/canvas/NodeBarShared'
 import { AGENT_PROMPT_TEMPLATES, POLISH_LLM_OPTIONS } from '@/pages/Canvas/useCanvas'
-import { listLlmModels } from '@/lib/llm'
 import type { CanvasCardData } from '@/pages/Canvas/useCanvas'
 import type { useCanvas } from '@/pages/Canvas/useCanvas'
 
 type CanvasVm = ReturnType<typeof useCanvas>
-type PlatformModelOption = { slug: string; label: string }
 
 function newId(prefix: string) {
   return `${prefix}-${Math.random().toString(36).slice(2, 8)}`
@@ -20,17 +18,7 @@ export function AgentNodeBody({ p, card }: { p: CanvasVm; card: CanvasCardData }
   const st = card.agentState
   const [metaOpen, setMetaOpen] = useState(true)
   const [tplOpen, setTplOpen] = useState(false)
-  const [platformModels, setPlatformModels] = useState(POLISH_LLM_OPTIONS)
   const tplRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    let active = true
-    void listLlmModels().then(models => {
-      if (!active || !models.length) return
-      setPlatformModels(models.map(model => ({ slug: model.model, label: model.model })))
-    }).catch(() => {})
-    return () => { active = false }
-  }, [])
 
   useEffect(() => {
     if (!tplOpen) return
@@ -276,10 +264,10 @@ export function AgentNodeBody({ p, card }: { p: CanvasVm; card: CanvasCardData }
       <div className="flex shrink-0 items-center gap-2" onPointerDown={e => e.stopPropagation()}>
         <Select value={st.model} onValueChange={v => up({ model: v })}>
           <SelectTrigger className="h-8 min-w-0 flex-1 border-border/60 bg-background/40 text-xs">
-            <span className="truncate">{platformModels.find(o => o.slug === st.model)?.label ?? st.model}</span>
+            <span className="truncate">{POLISH_LLM_OPTIONS.find(o => o.slug === st.model)?.label ?? st.model}</span>
           </SelectTrigger>
           <SelectContent>
-            {(platformModels.some(o => o.slug === st.model) ? platformModels : [{ slug: st.model, label: st.model }, ...platformModels] as PlatformModelOption[]).map(o => (
+            {POLISH_LLM_OPTIONS.map(o => (
               <SelectItem key={o.slug} value={o.slug}>
                 {o.label}
               </SelectItem>

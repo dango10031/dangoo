@@ -154,8 +154,9 @@ export async function callLlmWithFallback(modelName: string, opts: LlmCallOption
         usage: data.usage,
       }
     }
+    // 非 ok 响应（非 401/404/412）：任务可能已受理，落到下方 poll 兜底确认。
   } catch {
-    // 首次请求失败后由异步轮询确认结果。
+    // 网络中断/超时同理：任务可能已到服务端，交给 poll 循环判终态。
   } finally {
     window.clearTimeout(timeoutId)
   }

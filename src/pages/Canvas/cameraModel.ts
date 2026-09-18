@@ -587,3 +587,14 @@ export function nextCameraLetter(usedTitles: Iterable<string>, extraUsed?: Set<s
 export function cameraTitleFromLetter(letter: string): string {
   return `摄影机${letter}`
 }
+
+/**
+ * 把摄影提示词追加到用户提示词末尾: 去掉末尾中英文逗号/句号/空白后用中文逗号拼接。
+ * 摄影段为空时原样返回; 用户提示词为空时只返回摄影段。
+ */
+export function appendCameraPrompt(userPrompt: string, cameraPrompt: string): string {
+  const base = userPrompt.replace(/[，,。.\s]+$/u, '')
+  const extra = cameraPrompt.trim()
+  if (!extra) return userPrompt
+  return base ? `${base}，${extra}` : extra
+}

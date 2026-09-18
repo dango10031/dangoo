@@ -1,5 +1,16 @@
 import type { GenNodeParams, ModelKind } from './canvasTypes'
 
+/**
+ * 计价函数实际读取的参数字段（分辨率/画质/时长）。
+ * 完整的 GenNodeParams 是它的超集，可直接传入；测试与聚合函数也可只构造这几个字段。
+ */
+export type PriceParams = {
+  resolution?: string
+  quality?: string
+  videoDuration?: string
+  aspectRatio?: string
+}
+
 /** 文生图 6 渠道(顺序即规格确认顺序) */
 export const T2I_MODELS = [
   'gpt-image-2',
@@ -126,6 +137,37 @@ export function supportsTransparentBg(slug: string): boolean {
   return !!fam && TRANSPARENT_BG_FAMILY_KEYS.has(fam.key)
 }
 
+/**
+ * 校验生成节点是否可跑: 返回错误提示或 null。按实际运行模型(家族主键 + 是否有参考图)判断——
+ * 图生视频无提示词也可跑; 纯图生渠道缺图在此拦截; 文生图必须有画面描述。
+ */
+export function validateGenerateRun(input: {
+  prompt: string
+  hasImage: boolean
+  model: string
+}): string | null {
+  const { prompt, hasImage, model } = input
+  const runModel = resolveRunModel(model, hasImage)
+  const kind = modelKindOf(runModel)
+  const hasPrompt = prompt.trim().length > 0
+  if (kind !== 'i2v' && !hasPrompt) return '先在生成节点里写画面描述'
+  if (kind === 'i2i' && !hasImage) return '缺少图片无法运行: 请先给该渠道放一张参考图'
+  if (kind === 'i2v' && !hasImage) return '缺少图片无法运行: 请先给该渠道放一张图当首帧'
+  return null
+}
+
+/**
+ * 透明背景开关开启且当前渠道支持时, 把固定诉求前置到用户提示词最前面(摄影段仍在最后追加)。
+ * 不支持的渠道或关闭态原样返回; 用户已手写同类诉求时不重复加。
+ */
+export function applyTransparentBgPrompt(prompt: string, params: GenNodeParams): string {
+  if (!params.transparentBg || !supportsTransparentBg(params.model)) return prompt
+  const base = prompt.trim()
+  if (!base) return TRANSPARENT_BG_PROMPT_PREFIX
+  if (base.includes(TRANSPARENT_BG_PROMPT_PREFIX)) return base
+  return `${TRANSPARENT_BG_PROMPT_PREFIX}，${base}`
+}
+
 /** 家族选择 + 是否有生效参考图 → 实际提交的真实模型 slug; 纯图生渠道无图时仍返回 i2(由校验拦截) */
 export function resolveRunModel(familyKeyOrSlug: string, hasImg: boolean): string {
   const legacy = LEGACY_VIDEO_SLUG_MAP[familyKeyOrSlug]
@@ -204,7 +246,7 @@ export const IMAGE_TIER_PRICE: Record<string, Record<'low' | 'medium' | 'high', 
 type ImageQuality = 'low' | 'medium' | 'high'
 
 /** 分档图片单张用户价; 非分档模型或缺档返回 null */
-export function imageTierPrice(model: string, params?: GenNodeParams): number | null {
+export function imageTierPrice(model: string, params?: PriceParams): number | null {
   const table = IMAGE_TIER_PRICE[model]
   if (!table) return null
   const q = (String(params?.quality ?? 'medium').toLowerCase() as ImageQuality)
@@ -233,7 +275,7 @@ export const IMAGE_RES_PRICE: Record<string, Record<string, number>> = {
 }
 
 /** 仅按分辨率分档的图片单张用户价; 非该类模型返回 null */
-export function imageResPrice(model: string, params?: GenNodeParams): number | null {
+export function imageResPrice(model: string, params?: PriceParams): number | null {
   const table = IMAGE_RES_PRICE[model]
   if (!table) return null
   const res = String(params?.resolution ?? '1k').toLowerCase()
@@ -297,7 +339,7 @@ function round2Price(n: number): number {
  * AI 应用渠道(wan22 等)不在此处理, 返回 null 由调用方取 AI_APP_USER_PRICE。
  * 无法定价返回 null(调用方显示「按实际扣费」)。
  */
-export function userRunPrice(runModel: string, count: number, params?: GenNodeParams): number | null {
+export function userRunPrice(runModel: string, count: number, params?: PriceParams): number | null {
   if (aiAppSlugOf(runModel)) return null
   const kind = modelKindOf(runModel)
   const n = count > 0 ? count : 1
@@ -514,7 +556,7 @@ const VIDEO_PER_SEC: Record<string, Record<string, number>> = {
 }
 
 /** 视频每次用户实付价(每秒用户价 × 秒数); 该模型/分辨率无表内数据时返回 null(如固定按次的 H3) */
-export function videoBasePrice(model: string, params?: GenNodeParams): number | null {
+export function videoBasePrice(model: string, params?: PriceParams): number | null {
   // 旧旗舰 slug 已并入全能参考
   const m = LEGACY_VIDEO_SLUG_MAP[model] ?? model
   const table = VIDEO_PER_SEC[m]

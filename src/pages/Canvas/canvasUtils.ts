@@ -224,3 +224,36 @@ export function downloadDataUrl(dataUrl: string, fileName: string): void {
   anchor.click()
   anchor.remove()
 }
+
+/** 读取本地视频时长（秒），读不到返回 null；专用于上传前的时长校验 */
+export function readVideoDuration(file: File): Promise<number | null> {
+  return new Promise(resolve => {
+    const url = URL.createObjectURL(file)
+    const video = document.createElement('video')
+    video.preload = 'metadata'
+    const done = (val: number | null) => {
+      URL.revokeObjectURL(url)
+      resolve(val)
+    }
+    video.onloadedmetadata = () => {
+      const d = video.duration
+      done(Number.isFinite(d) && d > 0 ? d : null)
+    }
+    video.onerror = () => done(null)
+    video.src = url
+  })
+}
+
+/** Agent 表格模式结果解析：从大模型回复里抽 {"rows":[...]}，失败返回空数组 */
+export function parseAgentTableRows(text: string): Array<{ id?: string; cells?: Record<string, unknown> }> {
+  const raw = text.replace(/```json|```/g, '').trim()
+  const start = raw.indexOf('{')
+  const end = raw.lastIndexOf('}')
+  if (start < 0 || end <= start) return []
+  try {
+    const obj = JSON.parse(raw.slice(start, end + 1)) as { rows?: Array<{ id?: string; cells?: Record<string, unknown> }> }
+    return Array.isArray(obj.rows) ? obj.rows : []
+  } catch {
+    return []
+  }
+}

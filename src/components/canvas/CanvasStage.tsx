@@ -19,11 +19,12 @@ import { CanvasAddMenu } from '@/components/canvas/CanvasAddMenu'
 import { CanvasCardView } from '@/components/canvas/CanvasCardView'
 import { BatchGenerateNodeBar, GenerateNodeBar } from '@/components/canvas/GenerateNodeBar'
 import { ImagePlus } from 'lucide-react'
-import { extractImageFilesFromDrop } from '@/lib/dropFiles'
+import { extractImageFilesFromDrop, pickVideoFiles } from '@/lib/dropFiles'
 import { preloadLod } from '@/components/canvas/useLod'
 import { useCanvasVm, type CanvasVm, type ViewBounds } from '@/components/canvas/canvasRuntime'
 import type { CanvasCardData } from '@/pages/Canvas/useCanvas'
 import type { CanvasConnection } from '@/pages/Canvas/canvasTypes'
+import { geometrySignature, connectionSignatures } from '@/pages/Canvas/canvasGeometry'
 
 /*
  * react-hooks/refs: CanvasStage 是画布手势/几何快速路径的性能边界。
@@ -514,10 +515,16 @@ export function CanvasStage({ p }: { p: CanvasVm }) {
     () => probe.version,
     () => 0,
   )
-  // 仅在卡片数据提交后做全量几何同步(连线与卡片同帧); 选中/拉线/视图等无关提交不再触发
-  // querySelectorAll + 全量 offset 读取的强制布局扫描(那是打字/拉线时的主要固定开销之一)。
-  // 拖卡与 resize 走几何注册表的增量快速路径, 尺寸变化由 ResizeObserver 兜底, 不依赖这里。
+  // 仅在卡片「几何」(id 集合 / x/y/w/h)提交后才做全量 DOM 几何同步(连线与卡片同帧);
+  // 用几何签名跳过与几何无关的提交——打字改提示词、任务状态、结果 url、费用文案等也会产生
+  // 新的 cards 引用, 若每次都 querySelectorAll + 全量 offset 读取(强制布局扫描), 大画布上是
+  // 固定开销。拖卡/resize 走注册表增量快速路径; 图片加载/面板展开等「数据字段没变、实际尺寸变了」
+  // 的情形由 ResizeObserver 增量兜底, 都不依赖这里。
+  const geomSigRef = useRef('')
   useLayoutEffect(() => {
+    const sig = geometrySignature(p.cards)
+    if (sig === geomSigRef.current) return
+    geomSigRef.current = sig
     registry.syncFromDom()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.cards])
@@ -525,6 +532,9 @@ export function CanvasStage({ p }: { p: CanvasVm }) {
   // 查找索引只随卡片数据重建: 选中态/视图变化不重建, 连线层 memo 才能真正跳过无关重渲染
   const cards = p.cards
   const idx = useMemo(() => buildStageIndex(cards), [cards])
+  // 每张卡的连接签名: 仅连线变化时重建, 传给卡片让其在连线增删时精确刷新
+  // (卡片对象引用未变时, 融合/复刻/分层/循环等连线派生内容靠它更新)
+  const connSigs = useMemo(() => connectionSignatures(p.connections), [p.connections])
   const selectedSet = useMemo(() => new Set(p.selectedIds), [p.selectedIds])
   // 近场/连线矩形: 把最新视图(可能新于 React 状态: 平移快速路径)静默同步给探测器后取外扩矩形。
   // 近场外扩 1 个视口: 不仅提前挂载, 还保证快速反向往回甩时屏幕始终落在已挂载区内不露空;
@@ -539,20 +549,26 @@ export function CanvasStage({ p }: { p: CanvasVm }) {
   // 与视口相交(含 1 视口外扩)的卡。运行中的离屏卡不再强制挂载——壳上的状态点足够表达进度,
   // 结果回写发生在数据层, 卡滚回近场时自然看到终态; 这让 50~500 任务并跑时离屏重组件树保持为 0。
   const connectionHoverCardId = p.connectionDraft?.hoverSlot?.cardId
-  const nearIds = useMemo(() => {
+  // 一次遍历同时产出: 近场 id 集合 / 近场卡列表 / 待预热缩略图地址,
+  // 避免同一帧对 cards 重复 filter+map 多次全量扫描(大画布平移/轮询时的固定开销)。
+  const { nearIds, preloadUrls } = useMemo(() => {
     const set = new Set<string>()
+    const urls: string[] = []
     cards.forEach(c => {
-      if (selectedSet.has(c.id) || intersectsBounds(c, nearBounds)) set.add(c.id)
+      if (selectedSet.has(c.id) || intersectsBounds(c, nearBounds)) {
+        set.add(c.id)
+        if (c.url) urls.push(c.url)
+      }
     })
+    // 编辑中/拖线悬停的卡即使离屏也强制完整挂载(面板/槽高亮需要), 但不进缩略图预热
     if (p.editNodeId) set.add(p.editNodeId)
     if (connectionHoverCardId) set.add(connectionHoverCardId)
-    return set
+    return { nearIds: set, preloadUrls: urls }
   }, [cards, nearBounds, selectedSet, p.editNodeId, connectionHoverCardId])
   // 近场卡片后台预热 LOD 缩略图(滚回/缩小时直接命中), 只预热近场不全画布
   useEffect(() => {
-    preloadLod(p.cards.filter(c => nearIds.has(c.id)).map(c => c.url))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [nearIds])
+    preloadLod(preloadUrls)
+  }, [preloadUrls])
   // 缩放档位: 卡片内的图片 LOD(<0.45 / <0.9)、点击热区(<0.35)、端口与连线命中尺寸都是档位型逻辑。
   // 传档位而不是连续缩放值, memo 卡片只在跨档位时重渲染——滚轮连续缩放后停顿时不再整卡重渲染。
   const scaleBucket = viewport.scale < 0.45 ? 0.25 : viewport.scale < 0.9 ? 0.65 : 1
@@ -602,10 +618,20 @@ export function CanvasStage({ p }: { p: CanvasVm }) {
         const y = e.clientY
         // 资产面板拖回画布优先: 资产/卡片 DnD 不是外部文件, 不走上传逻辑
         if (p.handleStageAssetDrop(e, x, y)) return
-        void (async () => {
-          const files = await extractImageFilesFromDrop(e, 30)
-          if (files.length) void p.handleUploadImageFiles(files, x, y)
-        })()
+        const rawFiles = Array.from(e.dataTransfer?.files || [])
+        // 视频直接走视频通道(落可播放视频卡, 可截帧做参考 / 供 Seedance 全能参考),
+        // 不经过图片提取, 避免被图片分类弹「请选择图片文件」
+        const videos = pickVideoFiles(rawFiles)
+        if (videos.length) void p.handleUploadVideoFiles(videos, x, y)
+        const videoSet = new Set(videos)
+        const nonVideo = rawFiles.filter(f => !videoSet.has(f))
+        if (nonVideo.length) {
+          void (async () => {
+            // 图片走带 Safari/文件夹兼容的提取; 已按视频处理的文件不再传入
+            const files = await extractImageFilesFromDrop({ dataTransfer: { files: nonVideo } }, 30)
+            if (files.length) void p.handleUploadImageFiles(files, x, y)
+          })()
+        }
       }}
     >
       <div
@@ -724,6 +750,7 @@ export function CanvasStage({ p }: { p: CanvasVm }) {
                 selected={selectedSet.has(card.id)}
                 scale={scaleBucket}
                 tiny={viewport.scale <= 0.35}
+                connectionSig={connSigs.get(card.id) ?? ''}
                 slotHover={
                   p.connectionDraft?.hoverSlot?.cardId === card.id ? p.connectionDraft.hoverSlot : null
                 }
@@ -921,8 +948,8 @@ export function CanvasStage({ p }: { p: CanvasVm }) {
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center bg-background/70 backdrop-blur-sm">
           <div className="flex flex-col items-center gap-3 rounded-3xl border-2 border-dashed border-primary bg-card/90 px-12 py-10 shadow-2xl">
             <ImagePlus className="h-12 w-12 text-primary" />
-            <p className="text-lg font-semibold text-foreground">松开即可放入图片</p>
-            <p className="text-sm text-muted-foreground">支持 PNG / JPEG / WEBP 等, 可一次拖入多张或整个文件夹</p>
+            <p className="text-lg font-semibold text-foreground">松开即可放入图片或视频</p>
+            <p className="text-sm text-muted-foreground">图片生成带图生成节点; 视频生成可播放的视频卡, 可截帧做参考或供全能参考模型使用</p>
           </div>
         </div>
       )}

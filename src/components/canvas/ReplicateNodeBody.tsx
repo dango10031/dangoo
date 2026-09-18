@@ -127,8 +127,8 @@ function PanelField({
   const polishKey = `${cardId}:${side}-panel-${idx}`
   const polishing = p.polishingField === polishKey
   return (
-    <div className="space-y-1">
-      <span className="block text-xs font-semibold text-card-foreground">{label}</span>
+    <div className="flex h-full flex-col gap-1">
+      <span className="flex min-h-8 items-center text-xs font-semibold leading-tight text-card-foreground">{label}</span>
       <Textarea
         value={value}
         rows={3}
@@ -139,7 +139,7 @@ function PanelField({
       <Button
         size="sm"
         variant="outline"
-        className="h-7 w-full text-xs text-foreground"
+        className="mt-auto h-7 w-full text-xs text-foreground"
         disabled={polishing}
         onClick={() => p.handlePolishRepPanel(cardId, side, idx)}
       >
@@ -258,23 +258,32 @@ export function ReplicateNodeBody({
           <h4 className="text-xs font-semibold text-card-foreground">折面内容</h4>
           <span className="text-[11px] text-muted-foreground">数字、名称与联系方式会作为锁定文案</span>
         </div>
-        <div className="grid grid-cols-2 gap-1.5">
-          {(['front', 'back'] as const).map(side => {
-            const panels = side === 'front' ? rs.frontPanels : rs.backPanels
+        {/* 按折面行(正面N↔反面N)分组, 两列拉伸等高, 保证标题/输入框/润色钮横向对齐 */}
+        <div className="space-y-2">
+          {rs.frontPanels.map((frontText, idx) => {
+            const backPanels = rs.backPanels
+            const backText = backPanels[idx] ?? ''
+            const frontPanels = rs.frontPanels
             return (
-              <div key={side} className="space-y-2">
-                {panels.map((text, idx) => (
-                  <PanelField
-                    key={idx}
-                    p={p}
-                    cardId={card.id}
-                    side={side}
-                    idx={idx}
-                    label={repPanelLabel(foldType, triFold, side, idx)}
-                    value={text}
-                    panels={panels}
-                  />
-                ))}
+              <div key={idx} className="grid grid-cols-2 items-stretch gap-1.5">
+                <PanelField
+                  p={p}
+                  cardId={card.id}
+                  side="front"
+                  idx={idx}
+                  label={repPanelLabel(foldType, triFold, 'front', idx)}
+                  value={frontText}
+                  panels={frontPanels}
+                />
+                <PanelField
+                  p={p}
+                  cardId={card.id}
+                  side="back"
+                  idx={idx}
+                  label={repPanelLabel(foldType, triFold, 'back', idx)}
+                  value={backText}
+                  panels={backPanels}
+                />
               </div>
             )
           })}

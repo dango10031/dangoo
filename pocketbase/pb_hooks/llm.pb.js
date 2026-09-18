@@ -52,27 +52,6 @@ onBootstrap(function (e) {
       })
       $app.save(col)
       try { $app.logger().info("llm_jobs created") } catch (_) {}
-    } else {
-      var changed = false
-      function hasField(name) {
-        try { return !!existing.fields.getByName(name) } catch (_) {}
-        try {
-          for (var i = 0; i < existing.fields.length; i++) {
-            if (String(existing.fields[i].name) === String(name)) return true
-          }
-        } catch (_) {}
-        return false
-      }
-      function addField(def) {
-        if (hasField(def.name)) return
-        try { existing.fields.add(new Field(def)); changed = true } catch (_) {}
-      }
-      addField({ name: "tool_calls_json", type: "text", max: 200000 })
-      addField({ name: "finish_reason", type: "text", max: 32 })
-      if (changed) {
-        $app.save(existing)
-        try { $app.logger().info("llm_jobs fields upgraded") } catch (_) {}
-      }
     }
   } catch (err) {
     try { $app.logger().error("llm_jobs bootstrap: " + String(err && err.message || err)) } catch (_) {}
@@ -123,8 +102,6 @@ routerAdd("POST", "/api/llm/chat", function (e) {
         { name: "status", type: "text", required: true, max: 32 },
         { name: "result_text", type: "text", max: 80000 },
         { name: "error_message", type: "text", max: 4000 },
-        { name: "tool_calls_json", type: "text", max: 200000 },
-        { name: "finish_reason", type: "text", max: 32 },
       ],
       indexes: ["CREATE UNIQUE INDEX idx_llm_jobs_request_id ON llm_jobs (request_id)"],
     })
@@ -228,7 +205,6 @@ routerAdd("POST", "/api/llm/chat", function (e) {
       max_tokens: maxTokens,
       stream: false,
     }
-    if (body.tools && body.tools.length) payload.tools = body.tools
     if (body.temperature !== undefined && body.temperature !== null && cfg.supports_temperature === true) {
       payload.temperature = body.temperature
     }
@@ -258,12 +234,8 @@ routerAdd("POST", "/api/llm/chat", function (e) {
     }
 
     var text = (parsed.choices[0].message && parsed.choices[0].message.content) || ""
-    var toolCalls = (parsed.choices[0].message && parsed.choices[0].message.tool_calls) || []
-    var finishReason = parsed.choices[0].finish_reason || ""
     jobRec.set("status", "success")
     jobRec.set("result_text", text.substring(0, 80000))
-    jobRec.set("tool_calls_json", toolCalls.length ? JSON.stringify(toolCalls) : "")
-    jobRec.set("finish_reason", String(finishReason || "").substring(0, 32))
     $app.save(jobRec)
 
     // 上报访客自付 LLM 消耗 (仅已发布 app 生效; billing 来自 X-LLM-Include-Billing 响应)
@@ -283,7 +255,7 @@ routerAdd("POST", "/api/llm/chat", function (e) {
       })
     } catch (_) {}
 
-    return e.json(200, { ok: true, status: "success", model: modelName, text: text, tool_calls: toolCalls, finish_reason: finishReason, usage: parsed.usage || null })
+    return e.json(200, { ok: true, status: "success", model: modelName, text: text, usage: parsed.usage || null })
   } catch (err) {
     var msg = String(err && err.message || err)
     if (jobRec) {
@@ -314,8 +286,6 @@ routerAdd("POST", "/api/llm/poll", function (e) {
       ok: status === "success",
       status: status,
       text: status === "success" ? rec.getString("result_text") : "",
-      tool_calls: status === "success" ? (rec.getString("tool_calls_json") ? JSON.parse(rec.getString("tool_calls_json")) : []) : [],
-      finish_reason: status === "success" ? rec.getString("finish_reason") : "",
       error: status === "failed" ? rec.getString("error_message") : "",
       model: rec.getString("model_name"),
     })

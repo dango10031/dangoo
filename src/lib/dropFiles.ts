@@ -101,6 +101,17 @@ export function pickImageFiles(files: ArrayLike<File> | null | undefined): File[
   return out
 }
 
+/** 从 FileList / File 数组里挑视频（MIME 优先，缺失时回退扩展名）。 */
+export function pickVideoFiles(files: ArrayLike<File> | null | undefined): File[] {
+  if (!files) return []
+  const out: File[] = []
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i]
+    if (f && isVideoFile(f)) out.push(f)
+  }
+  return out
+}
+
 function isFileEntry(entry: FileSystemEntry | null | undefined): entry is FileSystemFileEntry {
   return !!entry && entry.isFile
 }
@@ -151,8 +162,13 @@ function readEntryImages(entry: FileSystemEntry, out: File[], depth: number, bud
  * 从拖拽事件稳健提取图片文件（兼容 Safari：files 为空时走 items / webkitGetAsEntry）。
  * 至多取 max 张；文件夹会递归但受限。
  */
+/** 拖放事件里只取本函数实际用到的字段，便于用纯文件数组构造（如已先分流掉视频） */
+type DropLike = {
+  dataTransfer: { files?: ArrayLike<File> | null; items?: DataTransferItemList } | null
+}
+
 export async function extractImageFilesFromDrop(
-  e: { dataTransfer: DataTransfer | null },
+  e: DropLike,
   max = 30,
 ): Promise<File[]> {
   const dt = e.dataTransfer

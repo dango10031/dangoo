@@ -151,7 +151,10 @@ function LodImg({
 
 /** 生成节点自带图片位已并入生成条缩略图行, 未选中时卡片只显示图片本身 */
 
-function CanvasCardViewImpl({ card, selected, scale, tiny, slotHover = null, snapHover = null }: { card: CanvasCardData; selected: boolean; scale: number; tiny?: boolean; slotHover?: { cardId: string; slot: RepSlot } | null; snapHover?: ConnectionSide | null }) {
+function CanvasCardViewImpl({ card, selected, scale, tiny, slotHover = null, snapHover = null, connectionSig = '' }: { card: CanvasCardData; selected: boolean; scale: number; tiny?: boolean; slotHover?: { cardId: string; slot: RepSlot } | null; snapHover?: ConnectionSide | null; connectionSig?: string }) {
+  // connectionSig 不直接参与渲染: 仅作为 memo 依赖, 与本卡相关的连线增删/端点变化时
+  // 强制刷新一次, 让节点体里经稳定 vm 上下文读取的连线派生状态(融合输入/上游图/复刻等)更新。
+  void connectionSig
   // 视图模型走稳定上下文(ref), 卡片只在 card/selected/缩放档位 变化时重渲染, 平移/拖其他卡不重渲染。
   // scale 是三档值(0.25/0.65/1)而非连续缩放, 滚轮连续缩放停顿时不会再让全部可见卡整卡重渲染;
   // tiny 是精确的 ≤35% 布尔, 只驱动点击热区外扩, 变化频次同样只有跨阈值一次。

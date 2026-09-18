@@ -675,6 +675,11 @@ export interface JobSpec {
   aiAppFirstFrame?: string
   /** 结果是否为视频(用于节点结果项 isVideo 标记) */
   isVideo?: boolean
+  /**
+   * 服务端受理后回填的真实任务 ID: 终态收尾按「卡+渠道+任务槽+任务号」
+   * compare-and-delete, 旧笔(如换渠道重跑的上一笔)先结束不得带走新笔待办。
+   */
+  remoteTaskId?: string
   /** 生成日志用: 提交时的参考图(永久链接) */
   refs?: string[]
   /** 生成日志用: 节点类型中文标签 */
